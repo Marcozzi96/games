@@ -1,4 +1,5 @@
 // Boot dell'app: il routing menù ⇄ gioco viene collegato nei task successivi.
+import './pwa';
 import '@/styles.css';
 
 const app = document.querySelector('#app');
