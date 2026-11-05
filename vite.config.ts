@@ -12,6 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // I worktree (checkout separati sotto .worktrees/) non devono
+    // contaminare la suite del repo principale: escludili esplicitamente.
+    exclude: ['**/node_modules/**', '**/dist/**', '.worktrees/**'],
   },
   plugins: [
     VitePWA({
