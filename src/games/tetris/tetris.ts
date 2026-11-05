@@ -181,6 +181,7 @@ function crea(ctx: CtxGioco): HandleGioco {
         }
         break
       }
+      case 'su': // alias di ruota (Tetris: ↑/W ruotano)
       case 'ruota': {
         const formaPrima = stato.tessera?.forma
         stato = ruota(stato)
@@ -250,6 +251,6 @@ export const tetris: Gioco = {
   id: 'tetris',
   nome: 'Tetris',
   icona: '/icons/icon-tetris.svg',
-  comandi: ['sx', 'dx', 'giu', 'ruota', 'conferma'],
+  comandi: ['su', 'sx', 'dx', 'giu', 'ruota', 'conferma'],
   crea,
 }

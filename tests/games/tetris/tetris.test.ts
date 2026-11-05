@@ -34,7 +34,7 @@ describe('tetris (Gioco)', () => {
     expect(tetris.id).toBe('tetris')
     expect(tetris.nome).toBe('Tetris')
     expect(tetris.icona).toBe('/icons/icon-tetris.svg')
-    expect(tetris.comandi).toEqual(['sx', 'dx', 'giu', 'ruota', 'conferma'])
+    expect(tetris.comandi).toEqual(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma'])
   })
 
   it('avvio pigro: niente tick prima del primo comando', () => {
@@ -59,6 +59,15 @@ describe('tetris (Gioco)', () => {
     const { ctx, comanda } = ctxFinto()
     comanda('ruota') // avvia (I spawna orizzontale, ruota → verticale 4×1, ghost 16)
     comanda('conferma') // hard drop: 16 × 2 = 32
+    expect(ctx.invia.punteggio).toHaveBeenCalledWith(32)
+  })
+
+  it('su è alias di ruota: la forma cambia come con ruota', () => {
+    const { ctx, comanda } = ctxFinto()
+    comanda('sx') // avvia (I orizzontale)
+    comanda('su') // alias di ruota: I diventa verticale 4×1
+    // ghost verticale da y=0 = 16 → hard drop = 32 (come il test "hard drop")
+    comanda('conferma')
     expect(ctx.invia.punteggio).toHaveBeenCalledWith(32)
   })
 
