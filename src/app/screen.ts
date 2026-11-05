@@ -2,7 +2,8 @@
 // comune (punti, record, pausa, chiudi), overlay pausa/game over, teardown
 // completo al ritorno al menù. Il gioco riceve un CtxGioco e non tocca il DOM.
 
-import { CollegaInput } from '@/core/input';
+import { CollegaInput, legendaTasti } from '@/core/input';
+import type { RigaLegenda } from '@/core/input';
 import { caricaRecord, salvaRecord } from '@/core/storage';
 import { beep } from '@/core/audio';
 import type { Comando, Gioco, HandleGioco } from '@/core/types';
@@ -48,8 +49,43 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
   overlay.className = 'overlay';
   overlay.hidden = true;
 
-  schermo.append(hud, wrap, overlay);
-  host.appendChild(schermo);
+  // --- Popup legenda comandi (bottone (i), in basso a destra) -----------------
+  const legend = document.createElement('div')
+  legend.className = 'legend'
+  legend.hidden = true
+  const pannelloLegenda = document.createElement('div')
+  const titoloLegenda = document.createElement('h2')
+  titoloLegenda.textContent = 'Comandi'
+  const righeLegenda = document.createElement('div')
+  righeLegenda.className = 'legend-righe'
+  const righe: RigaLegenda[] = legendaTasti(g.comandi)
+  for (const riga of righe) {
+    const rigaEl = document.createElement('div')
+    rigaEl.className = 'legend-riga'
+    const tasti = document.createElement('span')
+    tasti.textContent = riga.tasti
+    const etichetta = document.createElement('span')
+    etichetta.textContent = riga.etichetta
+    rigaEl.append(tasti, etichetta)
+    righeLegenda.appendChild(rigaEl)
+  }
+  const chiudiLegendaBtn = document.createElement('button')
+  chiudiLegendaBtn.type = 'button'
+  chiudiLegendaBtn.className = 'btn'
+  chiudiLegendaBtn.dataset.teste = 'chiudi-legenda'
+  chiudiLegendaBtn.textContent = 'Chiudi'
+  pannelloLegenda.append(titoloLegenda, righeLegenda, chiudiLegendaBtn)
+  legend.appendChild(pannelloLegenda)
+
+  const legendBtn = document.createElement('button')
+  legendBtn.type = 'button'
+  legendBtn.className = 'legend-btn'
+  legendBtn.dataset.teste = 'legenda'
+  legendBtn.textContent = '(i)'
+  legendBtn.setAttribute('aria-label', 'Comandi da tastiera')
+
+  schermo.append(hud, wrap, overlay, legend, legendBtn)
+  host.appendChild(schermo)
 
   // --- Stato ------------------------------------------------------------------
   let stato: Stato = 'attivo';
@@ -182,9 +218,31 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
     onEsci();
   };
 
+  const apriLegenda = (): void => {
+    legend.hidden = false
+  }
+
+  const chiudiLegenda = (): void => {
+    legend.hidden = true
+  }
+
+  legendBtn.addEventListener('click', () => {
+    if (legend.hidden) apriLegenda()
+    else chiudiLegenda()
+  })
+  legend.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === legend) chiudiLegenda() // clic sullo sfondo
+  })
+  chiudiLegendaBtn.addEventListener('click', chiudiLegenda)
+
   // --- Tasti riservati al core (P/Escape pausa, R riavvio) ---------------------
   const onKey = (e: KeyboardEvent): void => {
     if (smontato) return;
+    if (e.code === 'Escape' && !legend.hidden) {
+      e.preventDefault()
+      chiudiLegenda()
+      return // il popup non mette in pausa il gioco
+    }
     if (e.code === 'KeyP' || e.code === 'Escape') {
       e.preventDefault();
       if (stato === 'attivo') pausa();

@@ -109,6 +109,50 @@ describe('apriSchermo', () => {
     expect(canvas.style.width).toBe('501px');
   });
 
+  it('(i) apre il popup legenda con le righe dei comandi del gioco', () => {
+    apri()
+    const btn = host.querySelector('[data-teste="legenda"]') as HTMLButtonElement
+    expect(btn).not.toBeNull()
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const legend = host.querySelector('.legend') as HTMLElement
+    expect(legend).not.toBeNull()
+    expect(legend.hidden).toBe(false)
+    expect(legend.textContent).toContain('Comandi')
+    expect(legend.textContent).toContain('↑/W') // finto dichiara 'su'
+    expect(legend.textContent).toContain('P/Escape')
+  })
+
+  it('Chiudi e clic sullo sfondo chiudono il popup; (i) è toggle', () => {
+    apri()
+    const btn = host.querySelector('[data-teste="legenda"]') as HTMLButtonElement
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const legend = host.querySelector('.legend') as HTMLElement
+    const chiudi = legend.querySelector('[data-teste="chiudi-legenda"]') as HTMLButtonElement
+    chiudi.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(legend.hidden).toBe(true)
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true })) // riapre
+    expect(legend.hidden).toBe(false)
+    legend.dispatchEvent(new MouseEvent('click', { bubbles: true })) // clic sullo sfondo
+    expect(legend.hidden).toBe(true)
+  })
+
+  it('Escape chiude il popup senza toccare la pausa', () => {
+    apri()
+    const btn = host.querySelector('[data-teste="legenda"]') as HTMLButtonElement
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    keydown('Escape')
+    const legend = host.querySelector('.legend') as HTMLElement
+    expect(legend.hidden).toBe(true)
+    expect((host.querySelector('.overlay') as HTMLElement).hidden).toBe(true) // nessuna pausa
+  })
+
+  it('teardown con popup aperto: nessun listener orfano', () => {
+    apri()
+    host.querySelector('[data-teste="legenda"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    host.querySelector('[data-teste="chiudi"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(host.children.length).toBe(0)
+  })
+
   it('dopo due aperture consecutive i comandi non si duplicano', () => {
     apri();
     host.querySelector('[data-teste="chiudi"]' as string)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
