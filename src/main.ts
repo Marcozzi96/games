@@ -5,9 +5,11 @@ import { mostraMenu } from '@/app/menu';
 import { apriSchermo } from '@/app/screen';
 import type { Gioco } from '@/core/types';
 import { snake } from '@/games/snake/snake'
+import { tetris } from '@/games/tetris/tetris'
 import { registra } from '@/core/registry'
 
 registra(snake)
+registra(tetris)
 
 const trovata = document.querySelector<HTMLElement>('#app');
 if (!trovata) throw new Error('Elemento #app mancante in index.html');
