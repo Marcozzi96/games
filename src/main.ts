@@ -1,11 +1,20 @@
-// Boot dell'app: il routing completo menù ⇄ gioco arriva in Task 8.
+// Boot dell'app: routing semplice menù ⇄ gioco (nessun history API).
 import './pwa';
 import '@/styles.css';
 import { mostraMenu } from '@/app/menu';
+import { apriSchermo } from '@/app/screen';
+import type { Gioco } from '@/core/types';
 
-const app = document.querySelector<HTMLElement>('#app');
-if (!app) throw new Error('Elemento #app mancante in index.html');
+const trovata = document.querySelector<HTMLElement>('#app');
+if (!trovata) throw new Error('Elemento #app mancante in index.html');
+const app: HTMLElement = trovata;
 
-mostraMenu(app, () => {
-  alert('gioco in arrivo');
-});
+function vaiAMenu(): void {
+  mostraMenu(app, vaiAGioco);
+}
+
+function vaiAGioco(g: Gioco): void {
+  apriSchermo(g, app, vaiAMenu);
+}
+
+vaiAMenu();

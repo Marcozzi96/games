@@ -101,3 +101,133 @@ body {
   color: var(--accent);
   font-size: 0.85rem;
 }
+
+/* --- Schermo di gioco ------------------------------------------------------ */
+.schermo {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+}
+
+.hud-record {
+  color: #9ca3af;
+}
+
+.hud-btn {
+  margin-left: auto;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.1rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.hud-btn + .hud-btn {
+  margin-left: 8px;
+}
+
+.canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.canvas {
+  display: block;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(2, 56px);
+  gap: 6px;
+  justify-content: center;
+  padding: 12px 0 16px;
+}
+
+.pad-btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.pad-btn-su { grid-column: 2; grid-row: 1; }
+.pad-btn-sx { grid-column: 1; grid-row: 2; }
+.pad-btn-dx { grid-column: 3; grid-row: 2; }
+.pad-btn-giu { grid-column: 2; grid-row: 2; }
+.pad-btn-conferma,
+.pad-btn-ruota {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(11, 16, 32, 0.85);
+  z-index: 10;
+  padding: 24px;
+  text-align: center;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.overlay p {
+  margin: 0;
+  color: #9ca3af;
+}
+
+.badge {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 20px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.btn:focus-visible,
+.hud-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
