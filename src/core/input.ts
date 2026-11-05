@@ -30,6 +30,20 @@ const MAPPA_TASTI: Record<string, Comando> = {
   Enter: 'ruota',
 };
 
+const NOME_TASTO: Record<string, string> = {
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  KeyW: 'W',
+  KeyS: 'S',
+  KeyA: 'A',
+  KeyD: 'D',
+  Space: 'Spazio',
+  KeyX: 'X',
+  Enter: 'Invio'
+}
+
 const ETICHETTE: Record<Comando, string> = {
   su: 'Su',
   giu: 'Giù',
@@ -41,6 +55,23 @@ const ETICHETTE: Record<Comando, string> = {
 };
 
 const DIREZIONI: Comando[] = ['su', 'giu', 'sx', 'dx'];
+
+export type RigaLegenda = { tasti: string; etichetta: string }
+
+export function legendaTasti(comandi: Comando[]): RigaLegenda[] {
+  const righe: RigaLegenda[] = []
+  for (const c of comandi) {
+    if (c === 'punta') continue // non ha tasti: legenda solo da tastiera
+    const tasti = Object.keys(MAPPA_TASTI)
+      .filter((k) => MAPPA_TASTI[k] === c)
+      .map((k) => NOME_TASTO[k])
+      .join('/')
+    righe.push({ tasti, etichetta: ETICHETTE[c] })
+  }
+  righe.push({ tasti: 'P/Escape', etichetta: 'Pausa' })
+  righe.push({ tasti: 'R', etichetta: 'Riavvia' })
+  return righe
+}
 
 export function CollegaInput({ canvas, comandi, onComando }: CavalcaturaInput): {
   smonta(): void;

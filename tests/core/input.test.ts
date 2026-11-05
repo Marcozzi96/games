@@ -168,4 +168,24 @@ describe('input', () => {
     pointerdown(canvas, 10, 10);
     expect(onComando).not.toHaveBeenCalled();
   });
+
+  it('legendaTasti: una riga per comando dichiarato (ordine dichiarato) + Pausa/Riavvia', () => {
+    expect(input.legendaTasti(['sx', 'dx', 'giu', 'ruota', 'conferma'])).toEqual([
+      { tasti: '←/A', etichetta: 'Sinistra' },
+      { tasti: '→/D', etichetta: 'Destra' },
+      { tasti: '↓/S', etichetta: 'Giù' },
+      { tasti: 'X/Invio', etichetta: 'Ruota' },
+      { tasti: 'Spazio', etichetta: 'Conferma' },
+      { tasti: 'P/Escape', etichetta: 'Pausa' },
+      { tasti: 'R', etichetta: 'Riavvia' },
+    ])
+  })
+
+  it('legendaTasti: punta omessa (non ha tasti)', () => {
+    expect(input.legendaTasti(['punta', 'conferma'])).toEqual([
+      { tasti: 'Spazio', etichetta: 'Conferma' },
+      { tasti: 'P/Escape', etichetta: 'Pausa' },
+      { tasti: 'R', etichetta: 'Riavvia' },
+    ])
+  })
 });
