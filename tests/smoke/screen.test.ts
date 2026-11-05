@@ -98,6 +98,17 @@ describe('apriSchermo', () => {
     expect(host.textContent).toBe('');
   });
 
+  it('dimensiona il canvas tenendo conto di HUD e pad (nessun overflow del viewport)', () => {
+    // jsdom: offsetHeight = 0 sempre; mock a 50px per HUD e pad.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(50);
+    apri();
+    const canvas = host.querySelector('canvas') as HTMLCanvasElement;
+    // jsdom: innerHeight 768, innerWidth 1024, dpr 1.
+    // alt disponibile = 768 - 50 (hud) - 50 (pad) = 668; verticale 3:4 → 501×668.
+    expect(canvas.style.height).toBe('668px');
+    expect(canvas.style.width).toBe('501px');
+  });
+
   it('dopo due aperture consecutive i comandi non si duplicano', () => {
     apri();
     host.querySelector('[data-teste="chiudi"]' as string)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

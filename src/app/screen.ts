@@ -7,8 +7,6 @@ import { caricaRecord, salvaRecord } from '@/core/storage';
 import { beep } from '@/core/audio';
 import type { Comando, Gioco, HandleGioco } from '@/core/types';
 
-const LARGHEZZA_HUD = 56; // px riservati a HUD + margini verticali (stima)
-
 type Stato = 'attivo' | 'pausa' | 'fine';
 
 export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): void {
@@ -53,11 +51,32 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
   schermo.append(hud, wrap, overlay);
   host.appendChild(schermo);
 
+  // --- Stato ------------------------------------------------------------------
+  let stato: Stato = 'attivo';
+  let record = caricaRecord(g.id);
+  let smontato = false;
+  let giocoComanda: ((c: Comando | [Comando, number, number]) => void) | undefined;
+
+  // --- Input di gioco (tastiera + touch) ---------------------------------------
+  // Creato prima del dimensionamento: il pad (se presente) va misurato per
+  // lasciare spazio al canvas.
+  const input = CollegaInput({
+    canvas,
+    comandi: g.comandi,
+    onComando: (c: Comando | [Comando, number, number]) => {
+      if (stato !== 'attivo') return;
+      giocoComanda?.(c);
+    },
+  });
+
   // --- Dimensionamento canvas (viewport + orientazione + DPR) -----------------
+  // Il canvas deve stare nel viewport insieme a HUD e pad: si misurano
+  // gli elementi reali (offsetHeight) e il canvas prende lo spazio residuo.
   const orientazione = g.orientazione ?? 'verticale';
   function dimensiona(): void {
     const larg = window.innerWidth;
-    const alt = Math.max(window.innerHeight - LARGHEZZA_HUD, 100);
+    const pad = schermo.querySelector<HTMLElement>('.pad');
+    const alt = Math.max(window.innerHeight - hud.offsetHeight - (pad?.offsetHeight ?? 0), 100);
     // Rapporto larg/alt: verticale 3:4, orizzontale 4:3 — centrato nel viewport.
     const rapporto = orientazione === 'verticale' ? 3 / 4 : 4 / 3;
     let cssW = larg;
@@ -76,11 +95,6 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
   }
   dimensiona();
   window.addEventListener('resize', dimensiona);
-
-  // --- Stato ------------------------------------------------------------------
-  let stato: Stato = 'attivo';
-  let record = caricaRecord(g.id);
-  let smontato = false;
 
   const aggiornaHud = (punti: number): void => {
     puntiEl.textContent = `Punti: ${punti}`;
@@ -168,16 +182,6 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
     onEsci();
   };
 
-  // --- Input di gioco (tastiera + touch) ---------------------------------------
-  const input = CollegaInput({
-    canvas,
-    comandi: g.comandi,
-    onComando: (c: Comando | [Comando, number, number]) => {
-      if (stato !== 'attivo') return;
-      giocoComanda?.(c);
-    },
-  });
-
   // --- Tasti riservati al core (P/Escape pausa, R riavvio) ---------------------
   const onKey = (e: KeyboardEvent): void => {
     if (smontato) return;
@@ -210,7 +214,6 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
 
   // --- Avvio del gioco -----------------------------------------------------------
   let handle: HandleGioco | undefined;
-  let giocoComanda: ((c: Comando | [Comando, number, number]) => void) | undefined;
   handle = g.crea({
     canvas,
     invia: {
