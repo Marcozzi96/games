@@ -14,8 +14,8 @@ const onComando = vi.fn();
 // gli eventi e falsano gli assert. Tracciamo i handle e li smontiamo tutti.
 const handle: { smonta(): void }[] = [];
 
-function collega(comandi: Comando[]) {
-  const h = input.CollegaInput({ canvas, comandi, onComando });
+function collega(comandi: Comando[], pad?: boolean) {
+  const h = input.CollegaInput({ canvas, comandi, pad, onComando });
   handle.push(h);
   return h;
 }
@@ -26,11 +26,11 @@ function keydown(code: string) {
   return evt;
 }
 
-function pointerdown(el: Element, x = 0, y = 0) {
+function pointerdown(el: Element, x = 0, y = 0, id = 1) {
   const evt = new PointerEvent('pointerdown', {
     bubbles: true,
     cancelable: true,
-    pointerId: 1,
+    pointerId: id,
     clientX: x,
     clientY: y,
   });
@@ -38,11 +38,35 @@ function pointerdown(el: Element, x = 0, y = 0) {
   return evt;
 }
 
-function pointermove(el: Element, x = 0, y = 0) {
+function pointermove(el: Element, x = 0, y = 0, id = 1) {
   const evt = new PointerEvent('pointermove', {
     bubbles: true,
     cancelable: true,
-    pointerId: 1,
+    pointerId: id,
+    clientX: x,
+    clientY: y,
+  });
+  el.dispatchEvent(evt);
+  return evt;
+}
+
+function pointerup(el: Element, x = 0, y = 0, id = 1) {
+  const evt = new PointerEvent('pointerup', {
+    bubbles: true,
+    cancelable: true,
+    pointerId: id,
+    clientX: x,
+    clientY: y,
+  });
+  el.dispatchEvent(evt);
+  return evt;
+}
+
+function pointercancel(el: Element, x = 0, y = 0, id = 1) {
+  const evt = new PointerEvent('pointercancel', {
+    bubbles: true,
+    cancelable: true,
+    pointerId: id,
     clientX: x,
     clientY: y,
   });
@@ -184,6 +208,130 @@ describe('input', () => {
   it('legendaTasti: punta omessa (non ha tasti)', () => {
     expect(input.legendaTasti(['punta', 'conferma'])).toEqual([
       { tasti: 'Spazio', etichetta: 'Conferma' },
+      { tasti: 'P/Escape', etichetta: 'Pausa' },
+      { tasti: 'R', etichetta: 'Riavvia' },
+    ])
+  })
+
+  it('swipe oltre soglia: le 4 direzioni emettono il comando al rilascio (nessun comando durante il move)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 150, 105); // durante il drag: niente comandi
+    expect(onComando).not.toHaveBeenCalled();
+    pointerup(canvas, 200, 110); // dx=100, dy=10 → orizzontale destra
+    expect(onComando).toHaveBeenLastCalledWith('swipe-dx');
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 100, 200); // dy=100 → verticale giù (y cresce verso il basso)
+    expect(onComando).toHaveBeenLastCalledWith('swipe-giu');
+    pointerdown(canvas, 200, 100);
+    pointerup(canvas, 100, 110); // dx=-100 → sinistra
+    expect(onComando).toHaveBeenLastCalledWith('swipe-sx');
+    pointerdown(canvas, 100, 200);
+    pointerup(canvas, 100, 100); // dy=-100 → su
+    expect(onComando).toHaveBeenLastCalledWith('swipe-su');
+  });
+
+  it('swipe: asse dominante con delta 30x10 → orizzontale; soglia esatta 24px → emesso', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 130, 110); // |dx|=30 > |dy|=10, oltre soglia
+    expect(onComando).toHaveBeenLastCalledWith('swipe-dx');
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 124, 100); // max = 24 → >= soglia: emesso
+    expect(onComando).toHaveBeenLastCalledWith('swipe-dx');
+  });
+
+  it('tap sotto la soglia (max |d| < 24) → nessun comando', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 110, 105); // max = 10 < 24
+    expect(onComando).not.toHaveBeenCalled();
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 100, 100); // tap secco
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('punta: pointermove SENZA pointerdown non emette più niente (regressione hover)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['punta']);
+    pointermove(canvas, 88, 144);
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('due swipe consecutivi: esattamente un comando per gesto (Review Focus)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 200, 100);
+    pointerdown(canvas, 200, 100);
+    pointerup(canvas, 100, 100);
+    expect(onComando).toHaveBeenCalledTimes(2);
+    expect(onComando).toHaveBeenNthCalledWith(1, 'swipe-dx');
+    expect(onComando).toHaveBeenNthCalledWith(2, 'swipe-sx');
+  });
+
+  it('secondo pointerdown durante un gesto: ignorato; il suo pointerup non emette (Review Focus)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100, 1);
+    pointerdown(canvas, 50, 50, 2); // secondo dito: ignorato
+    pointermove(canvas, 150, 102, 2); // move del secondo dito: niente
+    pointerup(canvas, 60, 50, 2); // rilascio del secondo dito: niente
+    pointerup(canvas, 200, 100, 1); // rilascio del primo: dx=100
+    expect(onComando).toHaveBeenCalledTimes(1);
+    expect(onComando).toHaveBeenNthCalledWith(1, 'swipe-dx');
+  });
+
+  it('pointercancel conta come rilascio (Review Focus)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointercancel(canvas, 200, 100); // oltre soglia
+    expect(onComando).toHaveBeenLastCalledWith('swipe-dx');
+    pointerdown(canvas, 100, 100);
+    pointercancel(canvas, 105, 100); // sotto soglia
+    expect(onComando).toHaveBeenCalledTimes(1);
+  });
+
+  it('swipe non dichiarato: non emesso (listener agganciati ma filtro per comandi dichiarati)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-dx']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 100, 200); // verticale: swipe-giu non dichiarato
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('pad: false → nessun .pad nel DOM nemmeno con 4 direzioni dichiarate (come 2048)', () => {
+    collega(['su', 'giu', 'sx', 'dx'], false);
+    expect(document.querySelector('.pad')).toBeNull();
+    document.body.innerHTML = '';
+    document.body.appendChild(canvas);
+    collega(['su', 'giu', 'sx', 'dx']); // default: pad presente con 4 pulsanti
+    expect(document.querySelector('.pad')?.querySelectorAll('button').length).toBe(4);
+  });
+
+  it('smonta(): niente swipe né punta dopo il teardown (Review Focus)', () => {
+    mockaRect(0, 0, 300, 400);
+    const h = collega(['swipe-dx', 'punta']);
+    h.smonta();
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 200, 100);
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('legendaTasti: riga per comando 2048 completo (4 frecce + 4 swipe) + Pausa/Riavvia', () => {
+    expect(input.legendaTasti(['su', 'giu', 'sx', 'dx', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'])).toEqual([
+      { tasti: '↑/W', etichetta: 'Su' },
+      { tasti: '↓/S', etichetta: 'Giù' },
+      { tasti: '←/A', etichetta: 'Sinistra' },
+      { tasti: '→/D', etichetta: 'Destra' },
+      { tasti: 'Trascina', etichetta: 'Swipe sinistra' },
+      { tasti: 'Trascina', etichetta: 'Swipe destra' },
+      { tasti: 'Trascina', etichetta: 'Swipe su' },
+      { tasti: 'Trascina', etichetta: 'Swipe giù' },
       { tasti: 'P/Escape', etichetta: 'Pausa' },
       { tasti: 'R', etichetta: 'Riavvia' },
     ])

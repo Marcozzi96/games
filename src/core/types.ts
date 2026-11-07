@@ -1,6 +1,7 @@
 // Tipi condivisi della shell (fonte di verità per giochi e core).
 
-export type Comando = 'su' | 'giu' | 'sx' | 'dx' | 'conferma' | 'ruota' | 'punta';
+export type Comando = 'su' | 'giu' | 'sx' | 'dx' | 'conferma' | 'ruota' | 'punta'
+  | 'swipe-su' | 'swipe-giu' | 'swipe-sx' | 'swipe-dx';
 
 export type HandleGioco = {
   pausa(): void;
@@ -27,5 +28,6 @@ export type Gioco = {
   icona: string; // path SVG pubblico
   comandi: Comando[];
   orientazione?: 'verticale' | 'orizzontale'; // default 'verticale'
+  pad?: boolean; // default true: false sopprime i pulsanti touch
   crea: (ctx: CtxGioco) => HandleGioco;
 };

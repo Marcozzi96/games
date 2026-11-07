@@ -99,6 +99,7 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
   const input = CollegaInput({
     canvas,
     comandi: g.comandi,
+    pad: g.pad ?? true,
     onComando: (c: Comando | [Comando, number, number]) => {
       if (stato !== 'attivo') return;
       giocoComanda?.(c);
