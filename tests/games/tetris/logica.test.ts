@@ -121,7 +121,7 @@ describe('ruota', () => {
   })
 
   it('wall-kick: contro il muro sinistro scatta l\'offset -1', () => {
-    let s = { ...statoT(), tessera: { id: 'T' as IdTessera, forma: [[0, 1, 0], [1, 1, 1]], x: -1, y: 5 } }
+    let s: StatoTetris = { ...statoT(), tessera: { id: 'T' as IdTessera, forma: [[0, 1, 0], [1, 1, 1]], x: -1, y: 5 } }
     // forma 2×3 a x=-1: colonna -1 occupata → fuori. Rotazione in 3×2 a x=-1
     // occuperebbe ancora la colonna -1 (colonna 1 della nuova forma piena) → kick.
     s = ruota(s)

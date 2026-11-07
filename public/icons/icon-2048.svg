@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="14" fill="#faf8ef"/><rect x="8" y="8" width="40" height="40" rx="6" fill="#edc22e"/><rect x="52" y="8" width="40" height="40" rx="6" fill="#f2b179"/><rect x="8" y="52" width="40" height="40" rx="6" fill="#3c3a32"/><rect x="52" y="52" width="40" height="40" rx="6" fill="#eee4da"/><text x="28" y="38" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">4K</text><text x="72" y="38" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">8</text><text x="28" y="82" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">64</text><text x="72" y="82" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#776e65" text-anchor="middle">2</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect x="64" y="64" width="180" height="180" rx="24" fill="#eee4da"/>
+  <rect x="268" y="64" width="180" height="180" rx="24" fill="#ede0c8"/>
+  <rect x="64" y="268" width="180" height="180" rx="24" fill="#f2b179"/>
+  <rect x="268" y="268" width="180" height="180" rx="24" fill="#f59563"/>
+  <text x="154" y="154" font-family="system-ui, sans-serif" font-size="76" font-weight="bold" fill="#776e65" text-anchor="middle" dominant-baseline="central">2</text>
+  <text x="358" y="154" font-family="system-ui, sans-serif" font-size="76" font-weight="bold" fill="#776e65" text-anchor="middle" dominant-baseline="central">4</text>
+  <text x="154" y="358" font-family="system-ui, sans-serif" font-size="76" font-weight="bold" fill="#776e65" text-anchor="middle" dominant-baseline="central">8</text>
+  <text x="358" y="358" font-family="system-ui, sans-serif" font-size="64" font-weight="bold" fill="#776e65" text-anchor="middle" dominant-baseline="central">16</text>
+</svg>

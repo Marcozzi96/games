@@ -17,7 +17,7 @@ const SWIPE_DIR: Record<string, Direzione> = {
   'swipe-giu': 'giu',
 }
 
-// Palette classiche 2048: [sfondo tessera, colore testo]
+// Palette classiche 2048: valore → [sfondo tessera, colore testo]
 const TESSERE: Record<number, [string, string]> = {
   2: ['#eee4da', '#776e65'],
   4: ['#ede0c8', '#776e65'],
@@ -49,9 +49,11 @@ function crea(ctx: CtxGioco): HandleGioco {
   let pauSata = false
   let smontata = false
   let transizioneInCorso = false
+  let hintVisibile = true // finché non arriva la prima mossa valida
   let anim: AnimTessera[] = []
   let inizio = 0
   let rafId: number | undefined
+  let fanfariaId: number | undefined
 
   const disegnaTessera = (
     c: CanvasRenderingContext2D,
@@ -67,7 +69,8 @@ function crea(ctx: CtxGioco): HandleGioco {
     c.fillStyle = sfondo
     c.fillRect(x + off, y + off, l, l)
     c.fillStyle = testo
-    c.font = `bold ${Math.max(8, Math.floor(s * 0.4 * scala))}px system-ui`
+    const dimensione = s * (valore >= 1000 ? 0.32 : valore >= 100 ? 0.38 : 0.5) * scala
+    c.font = `bold ${Math.max(8, Math.floor(dimensione))}px system-ui`
     c.textAlign = 'center'
     c.textBaseline = 'middle'
     c.fillText(String(valore), x + s / 2, y + s / 2)
@@ -80,17 +83,32 @@ function crea(ctx: CtxGioco): HandleGioco {
     return { larg, alt, cella, offX: (larg - cella * LATI) / 2, offY: (alt - cella * LATI) / 2 }
   }
 
-  const disegnaSfondo = (c: CanvasRenderingContext2D, larg: number, alt: number, cella: number, offX: number, offY: number): void => {
+  const disegnaSfondo = (
+    c: CanvasRenderingContext2D,
+    larg: number,
+    alt: number,
+    cella: number,
+    offX: number,
+    offY: number
+  ): void => {
     c.fillStyle = '#0f172a'
     c.fillRect(0, 0, larg, alt)
-    c.fillStyle = 'rgba(148, 163, 184, 0.12)'
+    c.fillStyle = 'rgba(148, 163, 184, 0.08)'
     const gap = Math.max(2, cella * 0.05)
     for (let r = 0; r < LATI; r++)
       for (let col = 0; col < LATI; col++)
         c.fillRect(offX + col * cella + gap, offY + r * cella + gap, cella - 2 * gap, cella - 2 * gap)
   }
 
-  // Stato a riposo: griglia corrente.
+  const disegnaHint = (c: CanvasRenderingContext2D, larg: number, alt: number): void => {
+    c.fillStyle = '#94a3b8'
+    c.font = '16px system-ui'
+    c.textAlign = 'center'
+    c.textBaseline = 'middle'
+    c.fillText('Frecce/WASD o swipa', larg / 2, alt / 2)
+  }
+
+  // Stato a riposo: griglia corrente (+ hint finché non si muove).
   const disegna = (): void => {
     const c = ctx.canvas.getContext('2d')
     if (!c) return // jsdom: nessun contesto 2d
@@ -101,6 +119,7 @@ function crea(ctx: CtxGioco): HandleGioco {
         if (v !== 0) disegnaTessera(c, v, offX + col * cella, offY + r * cella, cella, 1)
       })
     )
+    if (hintVisibile) disegnaHint(c, larg, alt)
   }
 
   // Frame della transizione: interpola le tessere e si riaccoda fino a t >= 1.
@@ -167,42 +186,35 @@ function crea(ctx: CtxGioco): HandleGioco {
     rafId = requestAnimationFrame(frameTransizione)
   }
 
-  const comanda = (comando: Comando): void => {
-    if (smontata || pauSata || transizioneInCorso) return
+  const onComando = (c: Comando | [Comando, number, number]): void => {
+    if (typeof c !== 'string') return
+    // Controlli qui e non solo nella shell: i test usano una fake che inoltra.
+    if (smontata || pauSata || stato.finita || transizioneInCorso) return
     const dir: Direzione | undefined =
-      comando === 'su' || comando === 'giu' || comando === 'sx' || comando === 'dx'
-        ? comando
-        : SWIPE_DIR[comando]
+      c === 'su' || c === 'giu' || c === 'sx' || c === 'dx' ? c : SWIPE_DIR[c]
     if (!dir) return
     const vecchio = stato
     const { stato: nuovo, cambiato } = muovi(stato, dir)
     if (!cambiato) return
+    hintVisibile = false
     stato = nuovo
-    ctx.invia.punteggio(stato.punti)
-    if (!vecchio.giàVinto && stato.giàVinto) {
-      beep(880, 0.12)
-      beep(1175, 0.2)
-      ctx.invia.vittoria()
+    if (nuovo.punti > vecchio.punti) beep(880, 0.06) // fusione
+    else beep(660, 0.04) // mossa semplice
+    ctx.invia.punteggio(nuovo.punti)
+    if (nuovo.giàVinto && !vecchio.giàVinto) {
+      // Fanfaria 2048: due note ascendenti, una tantum (lo stile game-over della shell).
+      beep(659, 0.12)
+      fanfariaId = window.setTimeout(() => beep(784, 0.2), 130)
     }
     if (nuovo.finita) {
       disegna()
-      ctx.invia.fine(stato.punti)
+      ctx.invia.fine(nuovo.punti)
       return
     }
-    avviaTransizione(vecchio.griglia, stato.griglia, dir)
+    avviaTransizione(vecchio.griglia, nuovo.griglia, dir)
   }
 
-  ctx.comanda('su', comanda)
-  ctx.comanda('giu', comanda)
-  ctx.comanda('sx', comanda)
-  ctx.comanda('dx', comanda)
-  ctx.comanda('swipe-su', comanda)
-  ctx.comanda('swipe-giu', comanda)
-  ctx.comanda('swipe-sx', comanda)
-  ctx.comanda('swipe-dx', comanda)
-
-  // Avvio pigro: nessun rendering finché non arriva la prima mossa valida.
-  ctx.invia.punteggio(stato.punti)
+  ctx.comanda(onComando)
 
   return {
     pausa(): void {
@@ -211,12 +223,11 @@ function crea(ctx: CtxGioco): HandleGioco {
       if (rafId !== undefined) cancelAnimationFrame(rafId)
       rafId = undefined
       transizioneInCorso = false
-      ctx.invia.pausa()
     },
     riprendi(): void {
       if (smontata || !pauSata) return
       pauSata = false
-      ctx.invia.riprendi()
+      // Lo stato logico è già quello finale: si ridisegna a riposo, niente ripresa a metà.
       disegna()
     },
     reset(): void {
@@ -226,8 +237,9 @@ function crea(ctx: CtxGioco): HandleGioco {
       transizioneInCorso = false
       anim = []
       stato = creaStato()
-      ctx.invia.punteggio(stato.punti)
-      ctx.invia.reset()
+      hintVisibile = true
+      pauSata = false // riparte pulita: anche se la shell era in pausa
+      ctx.invia.punteggio(0)
       disegna()
     },
     smonta(): void {
@@ -235,6 +247,8 @@ function crea(ctx: CtxGioco): HandleGioco {
       smontata = true
       if (rafId !== undefined) cancelAnimationFrame(rafId)
       rafId = undefined
+      if (fanfariaId !== undefined) clearTimeout(fanfariaId)
+      fanfariaId = undefined
     },
   }
 }
@@ -242,7 +256,7 @@ function crea(ctx: CtxGioco): HandleGioco {
 export const gioco2048: Gioco = {
   id: '2048',
   nome: '2048',
-  icona: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="14" fill="#faf8ef"/><rect x="8" y="8" width="40" height="40" rx="6" fill="#edc22e"/><rect x="52" y="8" width="40" height="40" rx="6" fill="#f2b179"/><rect x="8" y="52" width="40" height="40" rx="6" fill="#3c3a32"/><rect x="52" y="52" width="40" height="40" rx="6" fill="#eee4da"/><text x="28" y="38" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">4K</text><text x="72" y="38" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">8</text><text x="28" y="82" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f9f6f2" text-anchor="middle">64</text><text x="72" y="82" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#776e65" text-anchor="middle">2</text></svg>`,
+  icona: '/icons/icon-2048.svg',
   comandi: ['su', 'giu', 'sx', 'dx', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'],
   pad: false,
   crea,
