@@ -171,5 +171,6 @@ export const snake: Gioco = {
   nome: 'Snake',
   icona: '/icons/icon-snake.svg',
   comandi: ['su', 'giu', 'sx', 'dx'],
+  joystick: true,
   crea,
 }

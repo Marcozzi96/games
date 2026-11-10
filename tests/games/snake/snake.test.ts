@@ -36,6 +36,7 @@ describe('snake (Gioco)', () => {
     expect(snake.nome).toBe('Snake')
     expect(snake.icona).toBe('/icons/icon-snake.svg')
     expect(snake.comandi).toEqual(['su', 'giu', 'sx', 'dx'])
+    expect(snake.joystick).toBe(true)
   })
 
   it('avvio pigro: niente tick prima della prima freccia', () => {
