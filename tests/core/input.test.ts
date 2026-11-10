@@ -14,8 +14,8 @@ const onComando = vi.fn();
 // gli eventi e falsano gli assert. Tracciamo i handle e li smontiamo tutti.
 const handle: { smonta(): void }[] = [];
 
-function collega(comandi: Comando[], pad?: boolean) {
-  const h = input.CollegaInput({ canvas, comandi, pad, onComando });
+function collega(comandi: Comando[], pad?: boolean, joystick?: boolean) {
+  const h = input.CollegaInput({ canvas, comandi, pad, joystick, onComando });
   handle.push(h);
   return h;
 }
@@ -336,4 +336,128 @@ describe('input', () => {
       { tasti: 'R', etichetta: 'Riavvia' },
     ])
   })
+});
+
+describe('joystick', () => {
+  it('joystick: true → nessun .pad nel DOM nemmeno con 4 direzioni', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    expect(document.querySelector('.pad')).toBeNull();
+  });
+
+  it('pointerdown + move oltre deadzone → emette la direzione dominante, una sola volta', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // dx=40 ≥ 20 → 'dx'
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+    pointermove(canvas, 160, 101); // stessa direzione: nessun'altra emissione
+    expect(onComando).toHaveBeenCalledTimes(1);
+  });
+
+  it('move sotto la deadzone (hypot < 20) → nessun comando', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 115, 104); // hypot(15,4) ≈ 15.5 < 20
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('cambio asse durante il drag → emette la nuova direzione', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // 'dx'
+    pointermove(canvas, 100, 140); // dy=40 → 'giu'
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+    expect(onComando).toHaveBeenNthCalledWith(2, 'giu');
+    expect(onComando).toHaveBeenCalledTimes(2);
+  });
+
+  it('diagonale → asse dominante (50x30 → dx; 30x50 → giu)', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 150, 130); // |dx|=50 > |dy|=30 → 'dx'
+    pointerup(canvas, 150, 130);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 130, 150); // |dy|=50 > |dx|=30 → 'giu'
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+    expect(onComando).toHaveBeenNthCalledWith(2, 'giu');
+  });
+
+  it('pointercancel conta come rilascio: stick rimosso e memoria azzerata (Review Focus)', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // 'dx'
+    pointercancel(canvas, 140, 100);
+    expect(document.querySelector('.joystick')).toBeNull();
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // ri-emette 'dx' (memoria azzerata al rilascio)
+    expect(onComando).toHaveBeenCalledTimes(2);
+    expect(onComando).toHaveBeenNthCalledWith(2, 'dx');
+  });
+
+  it('secondo pointerdown durante il gesto: ignorato, il suo rilascio non emette (Review Focus)', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100, 1);
+    pointermove(canvas, 140, 100, 1); // 'dx'
+    pointerdown(canvas, 50, 50, 2); // secondo dito: ignorato
+    pointermove(canvas, 90, 50, 2); // niente
+    pointerup(canvas, 90, 50, 2); // niente
+    pointerup(canvas, 200, 100, 1); // rilascio del primo: niente (già emesso 'dx')
+    expect(onComando).toHaveBeenCalledTimes(1);
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+  });
+
+  it('teardown: niente più comandi e nessun .joystick residuo (Review Focus)', () => {
+    const h = collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // 'dx', stick visibile
+    expect(document.querySelector('.joystick')).not.toBeNull();
+    h.smonta();
+    expect(document.querySelector('.joystick')).toBeNull();
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 200, 100);
+    expect(onComando).toHaveBeenCalledTimes(1);
+  });
+
+  it('il primo pointerdown sblocca l\'audio (AudioContext creato una volta)', () => {
+    const Ctor = vi.fn(function (this: unknown) {
+      return { destination: {}, currentTime: 0, resume: vi.fn().mockResolvedValue(undefined) };
+    });
+    (globalThis as { AudioContext?: unknown }).AudioContext = Ctor;
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100);
+    expect(Ctor).toHaveBeenCalledTimes(1);
+  });
+
+  it('swipe dichiarati + joystick attivo: i gesti sono del joystick, swipe mai emessi (Review Focus)', () => {
+    collega(['su', 'giu', 'sx', 'dx', 'swipe-dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // 'dx' dal joystick
+    pointerup(canvas, 200, 100); // nessun 'swipe-dx' al rilascio
+    expect(onComando).toHaveBeenCalledTimes(1);
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+  });
+
+  it('oscillazione rapida: un\'emissione per ogni vero cambio di direzione (Review Focus)', () => {
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true);
+    pointerdown(canvas, 100, 100);
+    pointermove(canvas, 140, 100); // 'dx'
+    pointermove(canvas, 60, 100); // dx=-40 → 'sx'
+    pointermove(canvas, 140, 100); // dx=+40 → 'dx'
+    expect(onComando).toHaveBeenCalledTimes(3);
+    expect(onComando).toHaveBeenNthCalledWith(1, 'dx');
+    expect(onComando).toHaveBeenNthCalledWith(2, 'sx');
+    expect(onComando).toHaveBeenNthCalledWith(3, 'dx');
+  });
+
+  it('legendaTasti con joystick=true: riga "Trascina — Joystick" prima di Pausa/Riavvia', () => {
+    expect(input.legendaTasti(['su', 'giu', 'sx', 'dx'], true)).toEqual([
+      { tasti: '↑/W', etichetta: 'Su' },
+      { tasti: '↓/S', etichetta: 'Giù' },
+      { tasti: '←/A', etichetta: 'Sinistra' },
+      { tasti: '→/D', etichetta: 'Destra' },
+      { tasti: 'Trascina', etichetta: 'Joystick' },
+      { tasti: 'P/Escape', etichetta: 'Pausa' },
+      { tasti: 'R', etichetta: 'Riavvia' },
+    ])
+  });
 });

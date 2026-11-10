@@ -29,5 +29,6 @@ export type Gioco = {
   comandi: Comando[];
   orientazione?: 'verticale' | 'orizzontale'; // default 'verticale'
   pad?: boolean; // default true: false sopprime i pulsanti touch
+  joystick?: boolean; // default false: thumbstick flottante (sopprime pad e swipe/punta)
   crea: (ctx: CtxGioco) => HandleGioco;
 };

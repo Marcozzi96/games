@@ -8,6 +8,9 @@
 // - swipe-*: gesto riconosciuto al rilascio (pointerup/pointercancel del
 //   pointer attivo): max(|dx|,|dy|) >= 24px → comando sull'asse dominante;
 //   un solo swipe per gesto (sotto soglia = tap, nessun comando).
+// - joystick: thumbstick flottante (compare dove poggia il dito, lo segue,
+//   scompare al rilascio); emette direzione dominante solo al cambio di
+//   direzione; sopprime il pad e i gestori punta/swipe.
 // - Il primo gesto (keydown o pointerdown) chiama audio.inizia() per
 //   sbloccare l'AudioContext (politiche di autoplay).
 
@@ -18,6 +21,7 @@ export type CavalcaturaInput = {
   canvas: HTMLCanvasElement;
   comandi: Comando[]; // solo questi generano pulsanti/gesti
   pad?: boolean; // default true: false sopprime i pulsanti touch
+  joystick?: boolean; // default false: thumbstick flottante (sopprime pad e swipe/punta)
   onComando: (c: Comando | [Comando, number, number]) => void;
 };
 
@@ -66,10 +70,12 @@ const ETICHETTE: Record<Comando, string> = {
 const DIREZIONI: Comando[] = ['su', 'giu', 'sx', 'dx'];
 const SWIPE: Comando[] = ['swipe-su', 'swipe-giu', 'swipe-sx', 'swipe-dx'];
 const SOGLIA_SWIPE = 24; // px CSS: sotto è un tap, non uno swipe
+const SOGLIA_JOYSTICK = 20; // px CSS: sotto non si emette nulla
+const MAX_SPOSTAMENTO_KNOB = 28; // px CSS: spostamento max del knob
 
 export type RigaLegenda = { tasti: string; etichetta: string }
 
-export function legendaTasti(comandi: Comando[]): RigaLegenda[] {
+export function legendaTasti(comandi: Comando[], joystick = false): RigaLegenda[] {
   const righe: RigaLegenda[] = []
   for (const c of comandi) {
     if (c === 'punta') continue // non ha tasti: legenda solo da tastiera
@@ -83,17 +89,26 @@ export function legendaTasti(comandi: Comando[]): RigaLegenda[] {
       .join('/')
     righe.push({ tasti, etichetta: ETICHETTE[c] })
   }
+  if (joystick) {
+    righe.push({ tasti: 'Trascina', etichetta: 'Joystick' })
+  }
   righe.push({ tasti: 'P/Escape', etichetta: 'Pausa' })
   righe.push({ tasti: 'R', etichetta: 'Riavvia' })
   return righe
 }
 
-export function CollegaInput({ canvas, comandi, pad = true, onComando }: CavalcaturaInput): {
+export function CollegaInput({ canvas, comandi, pad = true, joystick = false, onComando }: CavalcaturaInput): {
   smonta(): void;
 } {
   const dichiarati = new Set(comandi);
   let attivo = true;
   let pointerAttivo: { id: number; x: number; y: number } | undefined;
+
+  // Stato joystick
+  let stick: { id: number; x0: number; y0: number } | undefined;
+  let ultimoDir: Comando | undefined;
+  let stickEl: HTMLElement | undefined;
+  let knobEl: HTMLElement | undefined;
 
   // --- Tastiera -----------------------------------------------------------
   const onKeydown = (e: KeyboardEvent): void => {
@@ -112,11 +127,13 @@ export function CollegaInput({ canvas, comandi, pad = true, onComando }: Cavalca
   const padEl = document.createElement('div');
   padEl.className = 'pad';
 
-  const pulsanti: Comando[] = [
-    ...DIREZIONI.filter((c) => dichiarati.has(c)),
-    ...(dichiarati.has('conferma') ? ['conferma' as Comando] : []),
-    ...(dichiarati.has('ruota') ? ['ruota' as Comando] : []),
-  ];
+  const pulsanti: Comando[] = joystick
+    ? []
+    : [
+        ...DIREZIONI.filter((c) => dichiarati.has(c)),
+        ...(dichiarati.has('conferma') ? ['conferma' as Comando] : []),
+        ...(dichiarati.has('ruota') ? ['ruota' as Comando] : []),
+      ];
 
   for (const c of pulsanti) {
     const b = document.createElement('button');
@@ -135,6 +152,7 @@ export function CollegaInput({ canvas, comandi, pad = true, onComando }: Cavalca
   }
 
   // --- Punta (drag col dito premuto) + swipe (*) ---------------------------
+  // Attivi solo se joystick non è attivo (il joystick vince sulla mutua esclusione).
   const punta = (e: PointerEvent): [Comando, number, number] => {
     const rect = canvas.getBoundingClientRect();
     return ['punta', e.clientX - rect.left, e.clientY - rect.top];
@@ -177,11 +195,74 @@ export function CollegaInput({ canvas, comandi, pad = true, onComando }: Cavalca
     if (dichiarati.has(dir)) onComando(dir);
   };
 
-  if (dichiarati.has('punta') || SWIPE.some((c) => dichiarati.has(c))) {
+  if (!joystick && (dichiarati.has('punta') || SWIPE.some((c) => dichiarati.has(c)))) {
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', rilascia);
     canvas.addEventListener('pointercancel', rilascia);
+  }
+
+  // --- Joystick (thumbstick flottante) --------------------------------------
+  // Compare dove poggia il dito, lo segue, scompare al rilascio.
+  // Emette la direzione dominante solo al cambio di direzione (non a ogni move).
+  const onStickDown = (e: PointerEvent): void => {
+    if (!attivo) return;
+    if (stick !== undefined) return; // secondo dito: ignorato
+    e.preventDefault();
+    iniziaAudio();
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // pointer già rilasciato o id non valido
+    }
+    stick = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
+    const rect = canvas.getBoundingClientRect();
+    stickEl = document.createElement('div');
+    stickEl.className = 'joystick';
+    stickEl.style.left = `${e.clientX - rect.left}px`;
+    stickEl.style.top = `${e.clientY - rect.top}px`;
+    knobEl = document.createElement('div');
+    knobEl.className = 'joystick-knob';
+    stickEl.appendChild(knobEl);
+    (canvas.parentElement ?? canvas).appendChild(stickEl);
+  };
+
+  const onStickMove = (e: PointerEvent): void => {
+    if (!attivo) return;
+    if (stick === undefined || e.pointerId !== stick.id) return;
+    const dx = e.clientX - stick.x0;
+    const dy = e.clientY - stick.y0;
+    const m = Math.hypot(dx, dy);
+    // Sposta il knob (clampato a MAX_SPOSTAMENTO_KNOB)
+    if (knobEl) {
+      const k = m > MAX_SPOSTAMENTO_KNOB ? MAX_SPOSTAMENTO_KNOB / m : 1;
+      knobEl.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    }
+    // Emissione: solo oltre deadzone e solo al cambio di direzione
+    if (m < SOGLIA_JOYSTICK) return;
+    const dir: Comando = Math.abs(dx) > Math.abs(dy)
+      ? (dx > 0 ? 'dx' : 'sx')
+      : (dy > 0 ? 'giu' : 'su');
+    if (!dichiarati.has(dir) || dir === ultimoDir) return;
+    ultimoDir = dir;
+    onComando(dir);
+  };
+
+  const rilasciaJoystick = (e: PointerEvent): void => {
+    if (!attivo) return;
+    if (stick === undefined || e.pointerId !== stick.id) return;
+    stick = undefined;
+    ultimoDir = undefined; // memoria azzerata: un nuovo gesto ri-emette la stessa direzione
+    stickEl?.remove();
+    stickEl = undefined;
+    knobEl = undefined;
+  };
+
+  if (joystick) {
+    canvas.addEventListener('pointerdown', onStickDown);
+    canvas.addEventListener('pointermove', onStickMove);
+    canvas.addEventListener('pointerup', rilasciaJoystick);
+    canvas.addEventListener('pointercancel', rilasciaJoystick);
   }
 
   // Inserisci il pad DOPO il canvas nel DOM (solo se abilitato e ci sono
@@ -194,11 +275,20 @@ export function CollegaInput({ canvas, comandi, pad = true, onComando }: Cavalca
     smonta(): void {
       attivo = false;
       pointerAttivo = undefined;
+      stick = undefined;
+      ultimoDir = undefined;
+      stickEl?.remove();
+      stickEl = undefined;
+      knobEl = undefined;
       window.removeEventListener('keydown', onKeydown);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', rilascia);
       canvas.removeEventListener('pointercancel', rilascia);
+      canvas.removeEventListener('pointerdown', onStickDown);
+      canvas.removeEventListener('pointermove', onStickMove);
+      canvas.removeEventListener('pointerup', rilasciaJoystick);
+      canvas.removeEventListener('pointercancel', rilasciaJoystick);
       padEl.remove();
     },
   };
