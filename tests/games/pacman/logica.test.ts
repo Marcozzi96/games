@@ -44,6 +44,32 @@ describe('comando', () => {
   })
 })
 
+describe('inversione immediata (spec: "invert immediato")', () => {
+  it('premendo l\u2019opposto Pac-Man gira (non va avanti nella direzione originale)', () => {
+    const s = creaStato()
+    s.pacman.col = 13
+    s.pacman.riga = 23
+    s.pacman.dir = 'dx'
+    s.pacman.progresso = 0
+    const s1 = comando(s, 'sx')
+    const s2 = tick(s1, 0.125)
+    expect(s2.pacman.dir).toBe('sx')
+    expect(s2.pacman.col).toBe(12) // a sinistra, non a destra
+  })
+
+  it('inverte a metà tile con continuità di posizione (torna indietro, non avanza)', () => {
+    const s = creaStato()
+    s.pacman.col = 13
+    s.pacman.riga = 23
+    s.pacman.dir = 'dx'
+    s.pacman.progresso = 0.5
+    const s1 = comando(s, 'sx')
+    const s2 = tick(s1, 0.0625) // mezza tile
+    expect(s2.pacman.dir).toBe('sx')
+    expect(s2.pacman.col).toBe(13) // torna indietro di mezza tile
+  })
+})
+
 describe('tick — movimento e pellet', () => {
   it('dt=0.125 (1/8s) a vel 8 sposta Pac-Man di 1 tile', () => {
     const s = creaStato()

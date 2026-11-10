@@ -238,14 +238,29 @@ export function tick(stato: StatoPacman, dt: number, casual: () => number = Math
 function muoviPacman(s: StatoPacman, dt: number): void {
   const p = s.pacman
   const passabile: Passabile = (c, r) => pacmanPuPassare(s.labirinto, c, r)
+  // Inversione immediata (spec: "invert immediato"): se il buffer è l'opposto
+  // della direzione corrente, Pac-Man gira sul posto. Per la continuità di
+  // posizione (il pixel non salta) si riporta il riferimento sul tile di
+  // destinazione e il progresso a 1-progresso; se il dritto è un muro (Pac-Man
+  // fermo al confine) si gira in loco (il progresso è già 0).
+  if (p.dirPrevista !== null && p.dirPrevista === OPPOSTA[p.dir]) {
+    const dritto = prossimoTile(p.col, p.riga, p.dir, passabile)
+    p.dir = OPPOSTA[p.dir]
+    if (dritto.ok) {
+      p.col = dritto.col
+      p.riga = dritto.riga
+      p.progresso = 1 - p.progresso
+    }
+    p.dirPrevista = null
+  }
   p.progresso += velPacman(s.livello) * dt
   let guard = 0
   while (p.progresso >= 1 && guard < 16) {
     guard++
     // Applica la svolta bufferizzata (dirPrevista) se il tile nella nuova
-    // direzione è attraversabile e non è l'invertito.
+    // direzione è attraversabile. (L'inversione è già gestita sopra.)
     let dir = p.dir
-    if (p.dirPrevista !== null && p.dirPrevista !== OPPOSTA[p.dir]) {
+    if (p.dirPrevista !== null) {
       const d = prossimoTile(p.col, p.riga, p.dirPrevista, passabile)
       if (d.ok) dir = p.dirPrevista
     }
