@@ -89,7 +89,10 @@ function crea(ctx: CtxGioco): HandleGioco {
     stopTimer()
     timer = window.setInterval(() => {
       stato = tick(stato)
-      if (stato.punti > ultimiPunti) beep(880, 0.06)
+      if (stato.punti > ultimiPunti) {
+        beep(880, 0.06)
+        ctx.invia.punteggio(stato.punti)
+      }
       ultimiPunti = stato.punti
       disegna()
       if (stato.finita) {

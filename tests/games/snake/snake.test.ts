@@ -92,6 +92,19 @@ describe('snake (Gioco)', () => {
     expect(ctx.invia.fine).toHaveBeenLastCalledWith(0)
   })
 
+  it('invia.punteggio è chiamato quando il serpente mangia', () => {
+    // Food in (9,10): il serpente parte da (9,12) e va su.
+    // Dopo il primo tick (dalla freccia) è in (9,11); al tick successivo mangia.
+    // Indice 189 = (9,10); posizione in liberi: 189 (poiché 189 < 223).
+    // 0.441 * 429 = 189.19 → floor = 189 ✓
+    vi.spyOn(Math, 'random').mockReturnValue(0.441)
+    const { ctx, comanda } = ctxFinto()
+    comanda('su') // avvia, primo tick → testa in (9,11)
+    vi.advanceTimersByTime(140) // secondo tick → testa in (9,10) → mangia!
+    expect(ctx.invia.punteggio).toHaveBeenCalledWith(10)
+    expect(ctx.invia.fine).not.toHaveBeenCalled()
+  })
+
   it('resize: il gioco non modifica canvas.width/height (Review Focus)', () => {
     const { ctx, comanda } = ctxFinto()
     comanda('su')
