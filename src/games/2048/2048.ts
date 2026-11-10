@@ -42,6 +42,7 @@ type AnimTessera = {
   aC: number
   valore: number
   nuova: boolean
+  fusione: boolean
 }
 
 function crea(ctx: CtxGioco): HandleGioco {
@@ -51,6 +52,7 @@ function crea(ctx: CtxGioco): HandleGioco {
   let transizioneInCorso = false
   let hintVisibile = true // finché non arriva la prima mossa valida
   let anim: AnimTessera[] = []
+  let haFusioni = false
   let inizio = 0
   let rafId: number | undefined
   let fanfariaId: number | undefined
@@ -122,31 +124,41 @@ function crea(ctx: CtxGioco): HandleGioco {
     if (hintVisibile) disegnaHint(c, larg, alt)
   }
 
-  // Frame della transizione: interpola le tessere e si riaccoda fino a t >= 1.
+  // Frame della transizione: fase di scivolamento (DURATA_TRANSIZIONE) +
+  // fase pop delle fusioni (DURATA_POP, solo se ci sono fusioni).
   const frameTransizione = (): void => {
     rafId = undefined
     if (smontata || pauSata) return
     const c = ctx.canvas.getContext('2d')
     if (!c) {
-      // jsdom: senza contesto la transizione non parte (lo stato avanza puramente).
       transizioneInCorso = false
       return
     }
     const { larg, alt, cella, offX, offY } = geometria()
     const now = performance.now()
-    const t = Math.min(1, (now - inizio) / DURATA_TRANSIZIONE)
-    const e = 1 - (1 - t) ** 3 // ease-out
+    const durataTotale = DURATA_TRANSIZIONE + (haFusioni ? DURATA_POP : 0)
+    const t = Math.min(1, (now - inizio) / durataTotale)
+    const tSlide = Math.min(1, (now - inizio) / DURATA_TRANSIZIONE)
+    const e = 1 - (1 - tSlide) ** 3 // ease-out
     disegnaSfondo(c, larg, alt, cella, offX, offY)
     for (const a of anim) {
-      const r = a.daR + (a.aR - a.daR) * e
-      const col = a.daC + (a.aC - a.daC) * e
-      const pop = a.nuova ? 0.6 + 0.4 * Math.min(1, (now - inizio) / DURATA_POP) : 1
-      disegnaTessera(c, a.valore, offX + col * cella, offY + r * cella, cella, pop)
+      if (a.fusione) {
+        // Tessera risultante: visibile solo dopo lo scivolamento, con pop.
+        if (tSlide < 1) continue
+        const tPop = Math.min(1, Math.max(0, (now - inizio - DURATA_TRANSIZIONE) / DURATA_POP))
+        const scala = 0.6 + 0.4 * tPop
+        disegnaTessera(c, a.valore, offX + a.aC * cella, offY + a.aR * cella, cella, scala)
+      } else {
+        const r = a.daR + (a.aR - a.daR) * e
+        const col = a.daC + (a.aC - a.daC) * e
+        const pop = a.nuova ? 0.6 + 0.4 * Math.min(1, (now - inizio) / DURATA_POP) : 1
+        disegnaTessera(c, a.valore, offX + col * cella, offY + r * cella, cella, pop)
+      }
     }
     if (t >= 1) {
       transizioneInCorso = false
       anim = []
-      disegna() // stato a riposo
+      disegna()
     } else {
       rafId = requestAnimationFrame(frameTransizione)
     }
@@ -157,12 +169,13 @@ function crea(ctx: CtxGioco): HandleGioco {
   // le tessere senza origine (spawn) fanno il pop in posto.
   const avviaTransizione = (vecchia: number[][], nuova: number[][], dir: Direzione): void => {
     anim = []
+    haFusioni = false
     for (let i = 0; i < LATI; i++) {
       const vec: Array<[number, number]> = []
       const nuo: Array<[number, number, number]> = []
       for (let j = 0; j < LATI; j++) {
         const r = dir === 'sx' || dir === 'dx' ? i : dir === 'su' ? j : LATI - 1 - j
-        const c = dir === 'sx' || dir === 'su' ? j : LATI - 1 - j
+        const c = dir === 'su' || dir === 'giu' ? i : dir === 'sx' ? j : LATI - 1 - j
         if (vecchia[r][c] !== 0) vec.push([r, c])
         if (nuova[r][c] !== 0) nuo.push([r, c, nuova[r][c]])
       }
@@ -171,13 +184,18 @@ function crea(ctx: CtxGioco): HandleGioco {
         const v0 = k < vec.length ? vecchia[vec[k][0]][vec[k][1]] : 0
         const v1 = k + 1 < vec.length ? vecchia[vec[k + 1][0]][vec[k + 1][1]] : 0
         if (v0 === nv / 2 && v1 === nv / 2) {
-          anim.push({ daR: vec[k][0], daC: vec[k][1], aR: nr, aC: nc, valore: nv, nuova: false })
+          // Fusione: entrambi gli operandi scivolano mostrando il valore originale,
+          // poi la tessera risultante appare con pop.
+          anim.push({ daR: vec[k][0], daC: vec[k][1], aR: nr, aC: nc, valore: nv / 2, nuova: false, fusione: false })
+          anim.push({ daR: vec[k + 1][0], daC: vec[k + 1][1], aR: nr, aC: nc, valore: nv / 2, nuova: false, fusione: false })
+          anim.push({ daR: nr, daC: nc, aR: nr, aC: nc, valore: nv, nuova: false, fusione: true })
+          haFusioni = true
           k += 2
         } else if (v0 === nv) {
-          anim.push({ daR: vec[k][0], daC: vec[k][1], aR: nr, aC: nc, valore: nv, nuova: false })
+          anim.push({ daR: vec[k][0], daC: vec[k][1], aR: nr, aC: nc, valore: nv, nuova: false, fusione: false })
           k += 1
         } else {
-          anim.push({ daR: nr, daC: nc, aR: nr, aC: nc, valore: nv, nuova: true })
+          anim.push({ daR: nr, daC: nc, aR: nr, aC: nc, valore: nv, nuova: true, fusione: false })
         }
       }
     }
