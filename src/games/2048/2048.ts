@@ -215,6 +215,7 @@ function crea(ctx: CtxGioco): HandleGioco {
   }
 
   ctx.comanda(onComando)
+  disegna() // render iniziale: senza tick loop, senza questo lo schermo resta vuoto
 
   return {
     pausa(): void {

@@ -86,6 +86,32 @@ describe('2048 (Gioco)', () => {
     expect(DURATA_POP).toBe(100)
   })
 
+  it('disegna subito alla creazione: griglia e hint visibili senza comandi', () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 360
+    canvas.height = 480
+    const mock = {
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      font: '',
+      fillStyle: '',
+      textAlign: '',
+      textBaseline: '',
+    }
+    vi.spyOn(canvas, 'getContext').mockReturnValue(mock as unknown as CanvasRenderingContext2D)
+    const handle = gioco2048.crea({
+      canvas,
+      invia: { punteggio: vi.fn(), fine: vi.fn() },
+      comanda: () => {},
+    })
+    // Sfondo intero + 16 celle + 2 tessere iniziali
+    expect(mock.fillRect).toHaveBeenCalledTimes(19)
+    // 2 etichette tessere + hint centrale (360/2, 480/2)
+    expect(mock.fillText).toHaveBeenCalledTimes(3)
+    expect(mock.fillText).toHaveBeenCalledWith('Frecce/WASD o swipa', 180, 240)
+    handle.smonta()
+  })
+
   it('swipe e tasto fanno la stessa mossa: swipe-sx ≡ sx (punteggio identico)', () => {
     const a = ctxFinto()
     a.comanda('swipe-sx')
