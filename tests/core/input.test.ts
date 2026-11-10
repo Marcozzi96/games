@@ -449,6 +449,34 @@ describe('joystick', () => {
     expect(onComando).toHaveBeenNthCalledWith(3, 'dx');
   });
 
+  it('joystick: left/top relativi al contenitore (.canvas-wrap), non al canvas centrato (Review Focus mobile)', () => {
+    // In produzione il canvas è centrato nella .canvas-wrap (flex center):
+    // rect del canvas ≠ rect della wrap. L'overlay è position:absolute rispetto
+    // alla wrap, quindi le sue coordinate vanno calcolate rispetto alla wrap
+    // (elemento di riferimento assoluto); se calcolate rispetto al canvas lo
+    // stick appare spostato (sopra il dito) rispetto al punto del touch.
+    document.body.innerHTML = ''
+    const wrap = document.createElement('div')
+    wrap.className = 'canvas-wrap'
+    wrap.appendChild(canvas)
+    document.body.appendChild(wrap)
+
+    // canvas 300x400 centrato in una wrap 500x700 → offset (100, 150).
+    const rectCanvas = { left: 100, top: 150, width: 300, height: 400, right: 400, bottom: 550, x: 100, y: 150, toJSON: () => undefined } as DOMRect
+    const rectWrap = { left: 0, top: 0, width: 500, height: 700, right: 500, bottom: 700, x: 0, y: 0, toJSON: () => undefined } as DOMRect
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(rectCanvas)
+    vi.spyOn(wrap, 'getBoundingClientRect').mockReturnValue(rectWrap)
+
+    collega(['su', 'giu', 'sx', 'dx'], undefined, true)
+    // dito al centro del canvas: clientX = 100+150 = 250, clientY = 150+200 = 350.
+    pointerdown(canvas, 250, 350)
+    const stick = document.querySelector('.joystick') as HTMLElement
+    // rispetto alla wrap (top-left 0,0) → 250/350.
+    // Se calcolate rispetto al canvas (bug) → 150/200: stick sopra il dito.
+    expect(stick.style.left).toBe('250px')
+    expect(stick.style.top).toBe('350px')
+  })
+
   it('legendaTasti con joystick=true: riga "Trascina — Joystick" prima di Pausa/Riavvia', () => {
     expect(input.legendaTasti(['su', 'giu', 'sx', 'dx'], true)).toEqual([
       { tasti: '↑/W', etichetta: 'Su' },

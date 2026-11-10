@@ -216,7 +216,11 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
       // pointer già rilasciato o id non valido
     }
     stick = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
-    const rect = canvas.getBoundingClientRect();
+    // L'overlay è position:absolute rispetto a host (.canvas-wrap in prod):
+    // le coordinate vanno calcolate rispetto a host, NON al canvas (che nella
+    // wrap è centrato via flex center), altrimenti lo stick è spostato dal dito.
+    const host = canvas.parentElement ?? canvas;
+    const rect = host.getBoundingClientRect();
     stickEl = document.createElement('div');
     stickEl.className = 'joystick';
     stickEl.style.left = `${e.clientX - rect.left}px`;
@@ -224,7 +228,7 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
     knobEl = document.createElement('div');
     knobEl.className = 'joystick-knob';
     stickEl.appendChild(knobEl);
-    (canvas.parentElement ?? canvas).appendChild(stickEl);
+    host.appendChild(stickEl);
   };
 
   const onStickMove = (e: PointerEvent): void => {
