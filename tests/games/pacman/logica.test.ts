@@ -201,7 +201,13 @@ describe('tick — tunnel, livello, frutta, extra vita', () => {
     const s = creaStato()
     s.frutto = { tipo: 0, punti: 100, timer: 9.9 }
     s.pelletMangiati = 200 // evita di ri-innescare lo spawn a 70/170
-    for (const g of s.fantasmi) g.stato = 'occhio' // nessuna morte
+    // Ghost tenuti in casa (timer lungo): non si muovono e non possono
+    // uccidere Pac-Man durante la simulazione (niente fase 'morte' che
+    // congelerebbe il timer).
+    for (const g of s.fantasmi) {
+      g.stato = 'casa'
+      g.timerCasa = 999
+    }
     let s2 = s
     for (let i = 0; i < 100; i++) s2 = tick(s2, 0.1)
     expect(s2.frutto).toBeNull()
@@ -216,6 +222,80 @@ describe('tick — tunnel, livello, frutta, extra vita', () => {
     expect(s2.punti).toBe(7000)
     expect(s2.vite).toBe(VITE_INIZIALI + 1)
     expect(s2.extraVitaData).toBe(true)
+  })
+})
+
+describe('uscita di casa: i ghost non si bloccano al muro sopra la porta', () => {
+  // Config reale post-uscita: il ghost è attivo a (13,11) con dir 'su'
+  // (ereditata dall'uscita). (13,10) è muro; (13,12) è la porta, bloccata
+  // per i ghost attivi. Senza svolta forzata il ghost sbatte per sempre.
+  it('ghost appena uscito a (13,11) dir su: gira nel corridoio, non sbatte', () => {
+    const s = creaStato()
+    const g = s.fantasmi[1] // Pinky
+    g.stato = 'attivo'
+    g.col = 13
+    g.riga = 11
+    g.dir = 'su'
+    g.progresso = 0
+    const s2 = tick(s, 0.134) // 7.5 tile/s (scatter liv.1) → 1 tile
+    const g2 = s2.fantasmi[1]
+    expect(g2.stato).toBe('attivo')
+    expect(g2.dir).not.toBe('su')
+    expect(g2.riga).toBe(11)
+    expect(g2.col).toBe(14) // scatter corner (27,0) più vicino a dx
+  })
+
+  it('dallo start: dopo ~12s tutti e 4 i ghost sono usciti e in movimento', () => {
+    // RNG deterministico: il test è riproducibile.
+    let seed = 12345
+    const casual = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    }
+    let s = creaStato(1, casual)
+    // Pac-Man congelato contro il muro (13,22): non può morire né mangiare
+    // power. Modalità fissata a scatter (timerModa enorme): nessun cambio di
+    // fase e target corner fissi — il test isola il movimento dei ghost.
+    s.pacman = { col: 13, riga: 23, dir: 'su', dirPrevista: null, progresso: 0 }
+    s.timerModa = 1e9
+    const dt = 1 / 60
+    for (let i = 0; i < 12 * 60; i++) s = tick(s, dt, casual)
+    const pos0 = s.fantasmi.map((g) => ({ col: g.col, riga: g.riga }))
+    for (let i = 0; i < 4; i++) {
+      const g = s.fantasmi[i]
+      expect(g.stato, `ghost ${i} ancora ${g.stato}`).not.toBe('casa')
+      expect(g.stato, `ghost ${i} ancora ${g.stato}`).not.toBe('uscita')
+    }
+    for (let i = 0; i < 60; i++) s = tick(s, dt, casual)
+    s.fantasmi.forEach((g, i) => {
+      const mosso = g.col !== pos0[i].col || g.riga !== pos0[i].riga
+      expect(mosso, `ghost ${i} congelato a (${pos0[i].col},${pos0[i].riga})`).toBe(true)
+    })
+  })
+})
+
+describe('power pellet a metà dell\u2019uscita: il ghost completa l\u2019uscita', () => {
+  // Se un power viene mangiato mentre un ghost è in 'uscita' (sopra un tile
+  // casa), il ghost diventa spaventato MA DEVE POTERE COMPLETARE l'uscita:
+  // la regola "attivi non entrano in casa" vale per l'ingresso, non per
+  // l'evacuazione. Senza questa eccezione il ghost resta intrappolato in
+  // casa a sbattere contro i muri per sempre.
+  it('ghost spaventato a metà uscita esce di casa e non resta su tile casa/porta', () => {
+    const s = creaStato()
+    const p = s.fantasmi[1] // Pinky a metà dell\u2019uscita
+    p.stato = 'uscita'
+    p.col = 13
+    p.riga = 14
+    p.dir = 'su'
+    p.progresso = 0.5
+    // Pac-Man sul power pellet, in procinto di mangiarlo al primo tick.
+    s.pacman = { col: 2, riga: 23, dir: 'sx', dirPrevista: null, progresso: 0 }
+    let s2 = s
+    for (let i = 0; i < 300; i++) s2 = tick(s2, 1 / 60) // ~5 s (spaventati durano 6 s)
+    const g = s2.fantasmi[1]
+    expect(g.stato).toBe('spaventato')
+    const t = s2.labirinto[g.riga][g.col]
+    expect(t !== 'casa' && t !== 'porta', `ghost su tile ${t} a (${g.col},${g.riga})`).toBe(true)
   })
 })
 

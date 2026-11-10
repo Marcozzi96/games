@@ -314,17 +314,38 @@ function muoviPacman(s: StatoPacman, dt: number): void {
   }
 }
 
+// Target per la scelta direzione di un ghost attivo/spaventato.
+// (Spaventato: dummy — scegliDirezione sceglie a caso.)
+function targetScelta(
+  s: StatoPacman,
+  g: Fantasma,
+  modalità: 'scatter' | 'chase',
+): { col: number; riga: number } {
+  if (g.stato === 'spaventato') return { col: 0, riga: 0 }
+  const blinky = s.fantasmi[0]
+  const pm = { col: s.pacman.col, riga: s.pacman.riga, dir: s.pacman.dir }
+  return targetFantasma(g, pm, blinky, modalità)
+}
+
 // Avanza un fantasma (velocità per stato) con wrap tunnel, casa→uscita→attivo,
 // occhio→casa, scelta direzione ai crossroad e wall-collision.
 function muoviFantasma(s: StatoPacman, g: Fantasma, dt: number, casual: () => number): void {
   const lab = s.labirinto
   // Un ghost attivo/spaventato non attraversa casa né porta (riservati a
   // 'uscita'/'occhio'): senza la regola "cade" nella casa e non insegue più.
+  // Eccezione (evacuazione): un ghost già SOPRA un tile casa/porta — es.
+  // diventato spaventato a metà dell'uscita per un power — può continuare a
+  // muoversi su di essi fino a uscire: la regola vale per l'ingresso, non
+  // per l'uscita; altrimenti resterebbe intrappolato in casa per sempre.
   const eAttivo = g.stato === 'attivo' || g.stato === 'spaventato'
   const passabile: Passabile = (c, r) => {
     const t = tileAt(lab, c, r)
     if (t === 'muro') return false
-    if (eAttivo && (t === 'casa' || t === 'porta')) return false
+    if (eAttivo && (t === 'casa' || t === 'porta')) {
+      const qui = tileAt(lab, g.col, g.riga)
+      if (qui === 'casa' || qui === 'porta') return true
+      return false
+    }
     return true
   }
   const modalità: 'scatter' | 'chase' = s.indiceModa % 2 === 0 ? 'scatter' : 'chase'
@@ -354,7 +375,20 @@ function muoviFantasma(s: StatoPacman, g: Fantasma, dt: number, casual: () => nu
     guard++
     const dest = prossimoTile(g.col, g.riga, g.dir, passabile)
     if (!dest.ok) {
-      // Wall: inverti se possibile, altrimenti fermati al confine.
+      // Muro davanti: un ghost attivo/spaventato con una via perpendicolare
+      // DEVE voltarvisi (svolta forzata al confine). La scelta a crossroad in
+      // fondo al loop si esegue solo DOPO un passo: senza questo ramo un ghost
+      // appena uscito di casa (dir 'su', dritto=muro, dietro=porta bloccata)
+      // resterebbe a sbattere contro il muro sopra la porta per sempre.
+      if (eAttivo) {
+        const d = scegliDirezione(g, lab, targetScelta(s, g, modalità), casual)
+        if (d !== g.dir) {
+          g.dir = d
+          continue
+        }
+      }
+      // Nessuna via perpendicolare (o ghost in 'uscita'/'occhio'): inverti se
+      // possibile, altrimenti fermati al confine.
       const inv = OPPOSTA[g.dir]
       const dInv = prossimoTile(g.col, g.riga, inv, passabile)
       if (dInv.ok) g.dir = inv
@@ -388,14 +422,7 @@ function muoviFantasma(s: StatoPacman, g: Fantasma, dt: number, casual: () => nu
     // non limitarsi a invertire — altrimenti oscilla nel corridoio e non insegue).
     const drittoOk = prossimoTile(g.col, g.riga, g.dir, passabile).ok
     if (!drittoOk || èCrossroad(lab, g.col, g.riga, g.dir, true)) {
-      let target: { col: number; riga: number }
-      if (g.stato === 'spaventato') target = { col: 0, riga: 0 }
-      else {
-        const blinky = s.fantasmi[0]
-        const pm = { col: s.pacman.col, riga: s.pacman.riga, dir: s.pacman.dir }
-        target = targetFantasma(g, pm, blinky, modalità)
-      }
-      g.dir = scegliDirezione(g, lab, target, casual)
+      g.dir = scegliDirezione(g, lab, targetScelta(s, g, modalità), casual)
     }
   }
 }
