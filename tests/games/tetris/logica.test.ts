@@ -4,8 +4,9 @@ import {
   FORME,
   creaStato, avvia, muovi, ruota, softDrop, hardDrop, tick, ghost,
   intervalloGravita, mescolaBag,
+  seguiDito, getta, classificaRilascio,
 } from '@/games/tetris/logica'
-import type { StatoTetris, IdTessera } from '@/games/tetris/logica'
+import type { StatoTetris, IdTessera, SegueDito } from '@/games/tetris/logica'
 
 const grigliaVuota = (): string[] => Array(COLONNE * RIGHE).fill('libero')
 
@@ -238,6 +239,127 @@ describe('hardDrop', () => {
   it('tessera null: no-op', () => {
     const vuoto = { ...statoT(), tessera: null }
     expect(hardDrop(vuoto).tessera).toBeNull()
+  })
+})
+
+describe('seguiDito (drag touch)', () => {
+  it('primo tocco: fissa l\'ancora e non muove la tessera', () => {
+    const r = seguiDito(statoT(), { ancora: undefined, dir: undefined }, 100)
+    expect(r.stato.tessera?.x).toBe(3)
+    expect(r.seg.ancora).toBe(100)
+    expect(r.seg.dir).toBeUndefined()
+  })
+
+  it('sopra soglia in un solo salto: 1 cella per soglia, direzione a destra', () => {
+    const r0 = seguiDito(statoT(), { ancora: undefined, dir: undefined }, 0)
+    const r = seguiDito(r0.stato, r0.seg, 24) // +24px → 1 cella
+    expect(r.stato.tessera?.x).toBe(4)
+    expect(r.seg.dir).toBe(1)
+  })
+
+  it('accumulo: sotto soglia non muove, il resto resta per il tocco dopo', () => {
+    let s = statoT()
+    let seg: SegueDito = { ancora: undefined, dir: undefined }
+    let r = seguiDito(s, seg, 0); s = r.stato; seg = r.seg
+    r = seguiDito(s, seg, 10); s = r.stato; seg = r.seg // 10 < 24
+    expect(s.tessera?.x).toBe(3)
+    r = seguiDito(s, seg, 24); s = r.stato; seg = r.seg // ancora 0 → dx=24 → 1 cella
+    expect(s.tessera?.x).toBe(4)
+  })
+
+  it('flick multi-cella: +72px → 3 celle a destra', () => {
+    const r0 = seguiDito(statoT(), { ancora: undefined, dir: undefined }, 0)
+    const r = seguiDito(r0.stato, r0.seg, 72) // 72/24 = 3
+    expect(r.stato.tessera?.x).toBe(6)
+    expect(r.seg.dir).toBe(1)
+  })
+
+  it('sinistra: -48px → 2 celle a sinistra', () => {
+    const r0 = seguiDito(statoT(), { ancora: undefined, dir: undefined }, 100)
+    const r = seguiDito(r0.stato, r0.seg, 52) // 100→52 = -48 → 2 celle
+    expect(r.stato.tessera?.x).toBe(1)
+    expect(r.seg.dir).toBe(-1)
+  })
+
+  it('contro il muro: la tessera resta, l\'ancora segue il dito', () => {
+    const r0 = seguiDito(statoT(), { ancora: undefined, dir: undefined }, 0)
+    const r = seguiDito(r0.stato, r0.seg, -200) // molto a sinistra
+    expect(r.stato.tessera?.x).toBe(0) // bloccata al muro (T 3-wide, x min = 0)
+    expect(r.seg.dir).toBe(-1)
+  })
+
+  it('tessera null: no-op (nessun movimento, ancora fissata)', () => {
+    const vuoto = { ...statoT(), tessera: null }
+    const r = seguiDito(vuoto, { ancora: undefined, dir: undefined }, 0)
+    expect(r.stato.tessera).toBeNull()
+    expect(r.seg.ancora).toBe(0)
+  })
+})
+
+describe('getta (throw)', () => {
+  it('a destra: fino al muro (T 3-wide da x=3 → x=7)', () => {
+    expect(getta(statoT(), 1).tessera?.x).toBe(7)
+  })
+
+  it('a sinistra: fino al muro (x=0)', () => {
+    expect(getta(statoT(), -1).tessera?.x).toBe(0)
+  })
+
+  it('rispetta maxCelle come tetto (da x=3 con max 2 → x=5, non arriva al muro)', () => {
+    expect(getta(statoT(), 1, 2).tessera?.x).toBe(5)
+  })
+
+  it('contro una pila: si ferma dove sbatte, non oltre', () => {
+    const g = grigliaVuota()
+    g[1 * COLONNE + 7] = 'J' // blocco in (7,1): riga 1, dove la T ha le celle
+    // T 3-wide (riga 1: cols x..x+2): con il blocco in col 7, x+2 <= 6 → x <= 4
+    expect(getta({ ...statoT(), griglia: g }, 1).tessera?.x).toBe(4)
+  })
+
+  it('tessera null o fine: no-op (stato invariato per riferimento)', () => {
+    const vuoto = { ...statoT(), tessera: null }
+    expect(getta(vuoto, 1)).toBe(vuoto)
+    const finita = { ...statoT(), fine: true }
+    expect(getta(finita, 1)).toBe(finita)
+  })
+})
+
+describe('classificaRilascio (flick touch: getta/ruota/hard drop/nessuno)', () => {
+  it('flick orizzontale veloce → getta (in entrambe le direzioni)', () => {
+    expect(classificaRilascio(120, 0, 100, 'dx')).toBe('getta') // 1.2 px/ms
+    expect(classificaRilascio(-120, 0, 100, 'sx')).toBe('getta')
+  })
+
+  it('drag orizzontale lento → nessuno (il pezzo resta dove l\'hai messo)', () => {
+    expect(classificaRilascio(120, 0, 500, 'dx')).toBe('nessuno') // 0.24 px/ms
+  })
+
+  it('soglia velocità esatta (0.5 px/ms) → getta', () => {
+    expect(classificaRilascio(50, 0, 100, 'dx')).toBe('getta') // 0.5 px/ms
+  })
+
+  it('durata zero → nessuno (evita divisione per zero)', () => {
+    expect(classificaRilascio(120, 0, 0, 'dx')).toBe('nessuno')
+  })
+
+  it('swipe su veloce e lungo → ruota', () => {
+    expect(classificaRilascio(0, -80, 100, 'su')).toBe('ruota') // 0.8 px/ms, |dy|=80
+  })
+
+  it('swipe su veloce ma corto (< soglia verticale) → nessuno', () => {
+    expect(classificaRilascio(0, -30, 50, 'su')).toBe('nessuno') // 0.6 px/ms ma |dy|=30<56
+  })
+
+  it('swipe su lento ma lungo → nessuno (non è un flick)', () => {
+    expect(classificaRilascio(0, -80, 600, 'su')).toBe('nessuno') // 0.13 px/ms
+  })
+
+  it('swipe giù veloce e lungo → hardDrop', () => {
+    expect(classificaRilascio(0, 120, 100, 'giu')).toBe('hardDrop')
+  })
+
+  it('swipe giù corto (< soglia verticale) → nessuno', () => {
+    expect(classificaRilascio(0, 55, 55, 'giu')).toBe('nessuno') // |dy|=55<56
   })
 })
 

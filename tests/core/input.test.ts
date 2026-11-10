@@ -205,9 +205,28 @@ describe('input', () => {
     ])
   })
 
-  it('legendaTasti: punta omessa (non ha tasti)', () => {
+  it('legendaTasti: punta → riga gesto "Trascina — Muovi" (niente tasti, ma ha gesto touch)', () => {
     expect(input.legendaTasti(['punta', 'conferma'])).toEqual([
+      { tasti: 'Trascina', etichetta: 'Muovi' },
       { tasti: 'Spazio', etichetta: 'Conferma' },
+      { tasti: 'P/Escape', etichetta: 'Pausa' },
+      { tasti: 'R', etichetta: 'Riavvia' },
+    ])
+  })
+
+  it('legendaTasti: contratto completo di Tetris (tastiera + drag + swipe)', () => {
+    expect(input.legendaTasti(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'])).toEqual([
+      { tasti: '↑/W', etichetta: 'Su' },
+      { tasti: '←/A', etichetta: 'Sinistra' },
+      { tasti: '→/D', etichetta: 'Destra' },
+      { tasti: '↓/S', etichetta: 'Giù' },
+      { tasti: 'X/Invio', etichetta: 'Ruota' },
+      { tasti: 'Spazio', etichetta: 'Conferma' },
+      { tasti: 'Trascina', etichetta: 'Muovi' },
+      { tasti: 'Trascina', etichetta: 'Swipe sinistra' },
+      { tasti: 'Trascina', etichetta: 'Swipe destra' },
+      { tasti: 'Trascina', etichetta: 'Swipe su' },
+      { tasti: 'Trascina', etichetta: 'Swipe giù' },
       { tasti: 'P/Escape', etichetta: 'Pausa' },
       { tasti: 'R', etichetta: 'Riavvia' },
     ])
@@ -252,6 +271,31 @@ describe('input', () => {
     pointerdown(canvas, 100, 100);
     pointerup(canvas, 100, 100); // tap secco
     expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('tap sotto la soglia: muto anche se ruota è dichiarato (la rotazione passa allo swipe su)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['punta', 'ruota']);
+    pointerdown(canvas, 100, 100); // pointerdown emette punta (tuple)
+    pointerup(canvas, 105, 103); // max = 5 < 24 → tap: muto (niente ruota)
+    expect(onComando).not.toHaveBeenCalledWith('ruota');
+  });
+
+  it('tap sotto la soglia: non emette ruota se non dichiarato', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-giu']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 105, 103); // tap: ruota non dichiarato → niente
+    expect(onComando).not.toHaveBeenCalled();
+  });
+
+  it('swipe dichiarato + ruota: uno swipe giù emette swipe-giu, mai ruota (il tap è muto)', () => {
+    mockaRect(10, 20, 300, 400);
+    collega(['swipe-giu', 'ruota']);
+    pointerdown(canvas, 100, 100);
+    pointerup(canvas, 100, 200); // verticale: swipe-giu, NON ruota
+    expect(onComando).toHaveBeenLastCalledWith('swipe-giu');
+    expect(onComando).toHaveBeenNthCalledWith(1, 'swipe-giu');
   });
 
   it('punta: pointermove SENZA pointerdown non emette più niente (regressione hover)', () => {

@@ -9,8 +9,9 @@ import {
   SOFT_DROP_MS, INTERVALLO_SOFT_DROP,
   creaStato, avvia, muovi, ruota, softDrop, hardDrop, tick, ghost,
   intervalloGravita,
+  seguiDito, getta, classificaRilascio,
 } from '@/games/tetris/logica'
-import type { StatoTetris } from '@/games/tetris/logica'
+import type { StatoTetris, SegueDito, AsseSwipe, EsitoRilascio } from '@/games/tetris/logica'
 
 const ALTEZZA_NEXT = 48
 
@@ -21,6 +22,15 @@ function crea(ctx: CtxGioco): HandleGioco {
   let smontata = false
   let timer: number | undefined
   let timerSoft: number | undefined
+  // Controllo touch: drag "segue il dito" (punta) + flick al rilascio (swipe).
+  let seg: SegueDito = { ancora: undefined, dir: undefined }
+  let pieceId: string | undefined // id del pezzo attivo: azzera l'ancora a ogni nuovo pezzo
+  // Stato del gesto in corso (per la velocità del rilascio): t0 = timestamp del
+  // primo punta; (gsx,gsy) = posizione di inizio; (glx,gly) = ultimo punta;
+  // gestoAttivo = un pointerdown è in corso.
+  let t0 = 0
+  let gsx = 0, gsy = 0, glx = 0, gly = 0
+  let gestoAttivo = false
 
   const disegna = (): void => {
     const c = ctx.canvas.getContext('2d')
@@ -156,6 +166,17 @@ function crea(ctx: CtxGioco): HandleGioco {
     if (stato.livello !== livelloPrima) avviaTimer()
   }
 
+  // Fine di un gesto touch: classifica il rilascio (flick o trascinamento lento)
+  // e pulisce lo stato del drag (ancora + flag) per il prossimo gesto.
+  const esitoRilascio = (asse: AsseSwipe): EsitoRilascio => {
+    const esito = gestoAttivo
+      ? classificaRilascio(glx - gsx, gly - gsy, Date.now() - t0, asse)
+      : 'nessuno'
+    seg = { ancora: undefined, dir: undefined }
+    gestoAttivo = false
+    return esito
+  }
+
   const applicaComando = (c: Comando): void => {
     switch (c) {
       case 'sx':
@@ -186,19 +207,87 @@ function crea(ctx: CtxGioco): HandleGioco {
         const formaPrima = stato.tessera?.forma
         stato = ruota(stato)
         if (stato.tessera?.forma !== formaPrima) beep(330, 0.04)
+        seg = { ancora: undefined, dir: undefined } // fine gesto: ancora pulita
+        gestoAttivo = false
         break
       }
-      case 'conferma':
+      case 'conferma': // hard drop da tastiera (Spazio): non gated dalla velocità
         stato = hardDrop(stato)
         ctx.invia.punteggio(stato.punti)
         beep(110, 0.05)
         break
+      case 'swipe-sx':
+      case 'swipe-dx': { // flick orizzontale → gettata nella direzione del gesto
+        const asse: AsseSwipe = c === 'swipe-sx' ? 'sx' : 'dx'
+        const esito = esitoRilascio(asse)
+        if (esito === 'getta') {
+          stato = getta(stato, asse === 'sx' ? -1 : 1)
+          beep(200, 0.03)
+        }
+        break
+      }
+      case 'swipe-su': { // flick su veloce e lungo → ruota
+        const esito = esitoRilascio('su')
+        if (esito === 'ruota') {
+          const formaPrima = stato.tessera?.forma
+          stato = ruota(stato)
+          if (stato.tessera?.forma !== formaPrima) beep(330, 0.04)
+        }
+        break
+      }
+      case 'swipe-giu': { // flick giù veloce e lungo → hard drop
+        const esito = esitoRilascio('giu')
+        if (esito === 'hardDrop') {
+          stato = hardDrop(stato)
+          ctx.invia.punteggio(stato.punti)
+          beep(110, 0.05)
+        }
+        break
+      }
     }
     disegna()
   }
 
+  const suPunta = (x: number, y: number): void => {
+    // Inizio del gesto (primo punta): registra timestamp e posizione di partenza
+    // per la velocità del rilascio; ogni punta aggiorna la posizione finale.
+    if (!gestoAttivo) {
+      gestoAttivo = true
+      t0 = Date.now()
+      gsx = x; gsy = y
+    }
+    glx = x; gly = y
+    const id = stato.tessera?.id
+    // Nuovo pezzo (o primo tocco): azzera l'ancora per un gesto pulito (niente salto spurio).
+    if (id !== pieceId) {
+      seg = { ancora: x, dir: undefined }
+      pieceId = id
+      disegna()
+      return
+    }
+    const r = seguiDito(stato, seg, x)
+    stato = r.stato
+    seg = r.seg
+    disegna()
+  }
+
   const onComando = (c: Comando | [Comando, number, number]): void => {
-    if (typeof c !== 'string') return
+    // Drag orizzontale (punta): segue il dito e getta il pezzo al rilascio.
+    if (typeof c !== 'string') {
+      if (c[0] !== 'punta') return
+      if (smontata || pauSata || stato.fine) return
+      if (!avviata) {
+        avviata = true
+        stato = avvia(stato)
+        if (stato.fine) {
+          ctx.invia.fine(stato.punti)
+          return
+        }
+        avviaTimer()
+      }
+      suPunta(c[1], c[2])
+      return
+    }
     // Controlli qui e non solo nella shell: i test usano una fake che inoltra.
     if (smontata || pauSata || stato.fine) return
     if (!avviata) {
@@ -235,6 +324,10 @@ function crea(ctx: CtxGioco): HandleGioco {
       if (smontata) return
       stopTimer()
       stato = creaStato()
+      seg = { ancora: undefined, dir: undefined } // azzera il drag: niente ancora residua
+      pieceId = undefined
+      gestoAttivo = false // e il gesto in corso: niente velocità fantasma dopo il reset
+      t0 = 0; gsx = 0; gsy = 0; glx = 0; gly = 0
       avviata = false
       pauSata = false // riparte pulita: anche se la shell era in pausa
       ctx.invia.punteggio(0)
@@ -251,6 +344,7 @@ export const tetris: Gioco = {
   id: 'tetris',
   nome: 'Tetris',
   icona: '/icons/icon-tetris.svg',
-  comandi: ['su', 'sx', 'dx', 'giu', 'ruota', 'conferma'],
+  comandi: ['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'],
+  pad: false,
   crea,
 }

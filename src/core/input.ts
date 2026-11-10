@@ -7,7 +7,7 @@
 //   relative al canvas (setPointerCapture).
 // - swipe-*: gesto riconosciuto al rilascio (pointerup/pointercancel del
 //   pointer attivo): max(|dx|,|dy|) >= 24px → comando sull'asse dominante;
-//   un solo swipe per gesto (sotto soglia = tap, nessun comando).
+//   sotto soglia = tap → muto (la rotazione di Tetris è uno swipe su).
 // - joystick: thumbstick flottante (compare dove poggia il dito, lo segue,
 //   scompare al rilascio); emette direzione dominante solo al cambio di
 //   direzione; sopprime il pad e i gestori punta/swipe.
@@ -78,7 +78,11 @@ export type RigaLegenda = { tasti: string; etichetta: string }
 export function legendaTasti(comandi: Comando[], joystick = false): RigaLegenda[] {
   const righe: RigaLegenda[] = []
   for (const c of comandi) {
-    if (c === 'punta') continue // non ha tasti: legenda solo da tastiera
+    if (c === 'punta') {
+      // 'punta' non ha tasti ma è un gesto touch (drag): lo mostro in legenda.
+      righe.push({ tasti: 'Trascina', etichetta: 'Muovi' })
+      continue
+    }
     if (SWIPE.includes(c)) {
       righe.push({ tasti: 'Trascina', etichetta: ETICHETTE[c] })
       continue
@@ -188,7 +192,12 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
     const dx = e.clientX - pointerAttivo.x;
     const dy = e.clientY - pointerAttivo.y;
     pointerAttivo = undefined;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < SOGLIA_SWIPE) return; // tap
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SOGLIA_SWIPE) {
+      // Tap sotto la soglia: muto. La rotazione si fa con uno swipe su
+      // (Tetris); qui il tap non genera più comandi (evita rotazioni casuali
+      // quando si vuole solo spostare il pezzo di poco).
+      return;
+    }
     const dir: Comando = Math.abs(dx) > Math.abs(dy)
       ? (dx > 0 ? 'swipe-dx' : 'swipe-sx')
       : (dy > 0 ? 'swipe-giu' : 'swipe-su');

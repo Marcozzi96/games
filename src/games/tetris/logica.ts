@@ -198,3 +198,57 @@ function lock(stato: StatoTetris, tessera: Tessera): StatoTetris {
 export function intervalloGravita(livello: number): number {
   return Math.max(INTERVALLO_MINIMO, INTERVALLO_INIZIALE - (livello - 1) * RALLENTAMENTO_PER_LIVELLO)
 }
+
+// --- Controllo touch: "segue il dito" + gettata (throw) -----------------------
+// Logica pura del drag orizzontale: converte lo spostamento in px in celle,
+// ricordando l'ancora (posizione del dito al momento dell'ultima cella mossa)
+// e la direzione dominante, così il gioco può rilanciare il pezzo al rilascio.
+
+export type SegueDito = { ancora: number | undefined; dir: -1 | 1 | undefined }
+export const PX_PER_CELLA = 24      // px di spostamento per 1 cella
+export const CELLE_GETTA = 6        // distanza massima del throw (oppure il muro)
+// Soglie del tocco: sotto VELOCITA_FLIK il gesto è un trascinamento lento (il
+// pezzo resta dove l'hai messo); sopra è un flick (gettata/rotazione/hard drop).
+// Gli swipe verticali devono anche superare SOGLIA_SWIPE_VERT (più lunghi dei
+// movimenti) per evitare rotazioni/hard drop casuali.
+export const VELOCITA_FLIK = 0.5    // px/ms: soglia del flick
+export const SOGLIA_SWIPE_VERT = 56 // px: lunghezza minima dello swipe verticale
+
+export type AsseSwipe = 'sx' | 'dx' | 'su' | 'giu'
+export type EsitoRilascio = 'getta' | 'ruota' | 'hardDrop' | 'nessuno'
+
+// Classifica il gesto al rilascio del dito. `dx`/`dy` = spostamento del dito
+// (fine − inizio, px), `durata` = durata del gesto (ms), `asse` = l'asse
+// dominante già riconosciuto dal core (swipe-sx/dx/su/giu).
+export function classificaRilascio(dx: number, dy: number, durata: number, asse: AsseSwipe): EsitoRilascio {
+  const distanza = Math.hypot(dx, dy)
+  const veloce = durata > 0 && distanza / durata >= VELOCITA_FLIK
+  if (!veloce) return 'nessuno' // trascinamento lento: il pezzo resta
+  if (asse === 'sx' || asse === 'dx') return 'getta' // flick orizzontale
+  if (Math.abs(dy) < SOGLIA_SWIPE_VERT) return 'nessuno' // verticale troppo corto
+  return asse === 'su' ? 'ruota' : 'hardDrop'
+}
+
+export function seguiDito(stato: StatoTetris, seg: SegueDito, x: number): { stato: StatoTetris; seg: SegueDito } {
+  if (seg.ancora === undefined) return { stato, seg: { ancora: x, dir: seg.dir } }
+  let dx = x - seg.ancora
+  let ancora = seg.ancora
+  let dir = seg.dir
+  let s = stato
+  while (dx >= PX_PER_CELLA) { s = muovi(s, 1); ancora += PX_PER_CELLA; dx -= PX_PER_CELLA; dir = 1 }
+  while (dx <= -PX_PER_CELLA) { s = muovi(s, -1); ancora -= PX_PER_CELLA; dx += PX_PER_CELLA; dir = -1 }
+  return { stato: s, seg: { ancora, dir } }
+}
+
+// Gettata: sposta la tessera in `dir` finché non sbatte o esaurisce maxCelle.
+// È la "traiettoria" che continua dopo il rilascio del dito.
+export function getta(stato: StatoTetris, dir: -1 | 1, maxCelle: number = CELLE_GETTA): StatoTetris {
+  if (!stato.tessera || stato.fine) return stato
+  let s = stato
+  for (let i = 0; i < maxCelle; i++) {
+    const dopo = muovi(s, dir)
+    if (dopo === s) break // sbattuto
+    s = dopo
+  }
+  return s
+}
