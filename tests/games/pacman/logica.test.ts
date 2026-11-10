@@ -70,6 +70,31 @@ describe('inversione immediata (spec: "invert immediato")', () => {
   })
 })
 
+describe('muro: no bumping + svolta via dal muro', () => {
+  it('Pac-Man fermo contro un muro non sbatte (resta al centro del tile, progresso=0)', () => {
+    const s = creaStato()
+    s.pacman.col = 1
+    s.pacman.riga = 23
+    s.pacman.dir = 'sx' // (0,23) è un muro
+    s.pacman.progresso = 0
+    const s2 = tick(s, 0.016) // dt da frame reale (60fps), non un multiplo della tile
+    expect(s2.pacman.col).toBe(1) // non si muove
+    expect(s2.pacman.progresso).toBe(0) // non scivola nel muro (niente bump)
+  })
+
+  it('può girare via da un muro con una svolta bufferizzata', () => {
+    const s = creaStato()
+    s.pacman.col = 1
+    s.pacman.riga = 23
+    s.pacman.dir = 'sx' // muro
+    s.pacman.progresso = 0
+    const s1 = comando(s, 'su') // (1,22) è passabile
+    const s2 = tick(s1, 0.125)
+    expect(s2.pacman.riga).toBe(22) // è girato su
+    expect(s2.pacman.dir).toBe('su')
+  })
+})
+
 describe('tick — movimento e pellet', () => {
   it('dt=0.125 (1/8s) a vel 8 sposta Pac-Man di 1 tile', () => {
     const s = creaStato()

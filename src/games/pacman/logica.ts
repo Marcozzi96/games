@@ -253,6 +253,22 @@ function muoviPacman(s: StatoPacman, dt: number): void {
     }
     p.dirPrevista = null
   }
+  // Al confine di tile (progresso≈0) applica subito la svolta bufferizzata se
+  // valida: così Pac-Man può girare via da un muro senza doverlo "raggiungere".
+  if (p.progresso < 1e-6 && p.dirPrevista !== null) {
+    const d = prossimoTile(p.col, p.riga, p.dirPrevista, passabile)
+    if (d.ok) {
+      p.dir = p.dirPrevista
+      p.dirPrevista = null
+    }
+  }
+  // Se Pac-Man è fermo al confine (progresso≈0) e la direzione (effettiva) porta
+  // a un muro, non accumula progresso: resta al centro del tile senza "sbattere"
+  // contro il muro. (A metà tile è già impegnato nel movimento: non si ferma.)
+  if (p.progresso < 1e-6) {
+    const d = prossimoTile(p.col, p.riga, p.dir, passabile)
+    if (!d.ok) return
+  }
   p.progresso += velPacman(s.livello) * dt
   let guard = 0
   while (p.progresso >= 1 && guard < 16) {
