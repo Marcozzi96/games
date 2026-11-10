@@ -67,6 +67,7 @@ describe('pacman (Gioco)', () => {
     expect(pacman.nome).toBe('Pac-Man')
     expect(pacman.icona).toBe('/icons/icon-pacman.svg')
     expect(pacman.comandi).toEqual(['su', 'giu', 'sx', 'dx'])
+    expect(pacman.joystick).toBe(true)
   })
 
   it('crea() registra il listener comanda', () => {

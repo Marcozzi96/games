@@ -302,5 +302,6 @@ export const pacman: Gioco = {
   nome: 'Pac-Man',
   icona: '/icons/icon-pacman.svg',
   comandi: ['su', 'giu', 'sx', 'dx'],
+  joystick: true,
   crea,
 }
