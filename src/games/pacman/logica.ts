@@ -13,7 +13,6 @@ import {
   creaLabirinto,
   tileAt,
   pacmanPuPassare,
-  ghostPuPassare,
   èCrossroad,
 } from './labirinto'
 import type { Fantasma, StatoFantasma } from './fantasmi'
@@ -288,7 +287,15 @@ function muoviPacman(s: StatoPacman, dt: number): void {
 // occhio→casa, scelta direzione ai crossroad e wall-collision.
 function muoviFantasma(s: StatoPacman, g: Fantasma, dt: number, casual: () => number): void {
   const lab = s.labirinto
-  const passabile: Passabile = (c, r) => ghostPuPassare(lab, c, r)
+  // Un ghost attivo/spaventato non attraversa casa né porta (riservati a
+  // 'uscita'/'occhio'): senza la regola "cade" nella casa e non insegue più.
+  const eAttivo = g.stato === 'attivo' || g.stato === 'spaventato'
+  const passabile: Passabile = (c, r) => {
+    const t = tileAt(lab, c, r)
+    if (t === 'muro') return false
+    if (eAttivo && (t === 'casa' || t === 'porta')) return false
+    return true
+  }
   const modalità: 'scatter' | 'chase' = s.indiceModa % 2 === 0 ? 'scatter' : 'chase'
 
   if (g.stato === 'casa') {
@@ -345,8 +352,11 @@ function muoviFantasma(s: StatoPacman, g: Fantasma, dt: number, casual: () => nu
       }
       continue
     }
-    // 'attivo' o 'spaventato': scelta direzione ai crossroad.
-    if (èCrossroad(lab, g.col, g.riga, g.dir, true)) {
+    // 'attivo' o 'spaventato': scelta direzione a crossroad OPPURE a svolta
+    // forzata (dritto bloccato: il ghost DEVE scegliere la via perpendicolare,
+    // non limitarsi a invertire — altrimenti oscilla nel corridoio e non insegue).
+    const drittoOk = prossimoTile(g.col, g.riga, g.dir, passabile).ok
+    if (!drittoOk || èCrossroad(lab, g.col, g.riga, g.dir, true)) {
       let target: { col: number; riga: number }
       if (g.stato === 'spaventato') target = { col: 0, riga: 0 }
       else {

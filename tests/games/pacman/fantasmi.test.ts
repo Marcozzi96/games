@@ -136,6 +136,15 @@ describe('scegliDirezione — deterministica', () => {
     // Dir 'giu' (su esclusa): giu → (1,6) d²=625+9=634; dx → (2,5) d²=576+4=580 → 'dx'
     expect(scegliDirezione(fantasma(0, 1, 5, 'giu'), lab, { col: 26, riga: 3 }, () => 0)).toBe('dx')
   })
+
+  it('un ghost attivo NON entra in casa/porta: la porta sotto viene esclusa', () => {
+    // Blinky a (13,11): su=(13,10) muro, giu=(13,12) PORTA, sx=(12,11) libero, dx=(14,11) libero.
+    // Dir 'sx' → dx esclusa. Target = casa (13,14), dritto sotto: senza la regola 'giu'
+    // (d²=4) vincerebbe su 'sx' (d²=10) e il ghost cadrebbe nella porta. Con la regola
+    // 'giu' è esclusa → l'unica via è 'sx'.
+    const g = fantasma(0, 13, 11, 'sx', 'attivo')
+    expect(scegliDirezione(g, lab, { col: 13, riga: 14 }, () => 0)).toBe('sx')
+  })
 })
 
 describe('scegliDirezione — spaventato', () => {

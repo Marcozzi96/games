@@ -1,7 +1,7 @@
 // AI fantasmi: funzioni pure per posizioni iniziali, target tile e scelta direzione.
 
 import type { Tile, Direzione } from './labirinto'
-import { direzioniDisponibili, GHOST_DOOR, GHOST_HOUSE } from './labirinto'
+import { direzioniDisponibili, tileAt, GHOST_DOOR, GHOST_HOUSE } from './labirinto'
 
 export type StatoFantasma = 'casa' | 'uscita' | 'attivo' | 'spaventato' | 'occhio'
 
@@ -108,7 +108,18 @@ export function scegliDirezione(
   target: { col: number; riga: number },
   casual: () => number,
 ): Direzione {
-  const disponibili = direzioniDisponibili(lab, ghost.col, ghost.riga, true).filter((d) => d !== OPPOSTA[ghost.dir])
+  // Un ghost attivo/spaventato non entra in casa né nella porta: quei tile sono
+  // riservati agli stati 'uscita' (esci) e 'occhio' (rientro). Senza questa
+  // regola il ghost "cade" nella casa (vicolo cieco) e orbita lì invece di inseguire.
+  const eAttivo = ghost.stato === 'attivo' || ghost.stato === 'spaventato'
+  const disponibili = direzioniDisponibili(lab, ghost.col, ghost.riga, true).filter((d) => {
+    if (d === OPPOSTA[ghost.dir]) return false
+    if (eAttivo) {
+      const t = tileAt(lab, ghost.col + DELTA[d].dcol, ghost.riga + DELTA[d].drow)
+      if (t === 'casa' || t === 'porta') return false
+    }
+    return true
+  })
   if (disponibili.length === 0) return ghost.dir
   if (ghost.stato === 'spaventato') {
     return disponibili[Math.floor(casual() * disponibili.length)]
