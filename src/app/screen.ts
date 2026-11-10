@@ -58,7 +58,7 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
   titoloLegenda.textContent = 'Comandi'
   const righeLegenda = document.createElement('div')
   righeLegenda.className = 'legend-righe'
-  const righe: RigaLegenda[] = legendaTasti(g.comandi)
+  const righe: RigaLegenda[] = legendaTasti(g.comandi, g.joystick)
   for (const riga of righe) {
     const rigaEl = document.createElement('div')
     rigaEl.className = 'legend-riga'
@@ -100,6 +100,7 @@ export function apriSchermo(g: Gioco, host: HTMLElement, onEsci: () => void): vo
     canvas,
     comandi: g.comandi,
     pad: g.pad ?? true,
+    joystick: g.joystick,
     onComando: (c: Comando | [Comando, number, number]) => {
       if (stato !== 'attivo') return;
       giocoComanda?.(c);

@@ -153,6 +153,16 @@ describe('apriSchermo', () => {
     expect(host.children.length).toBe(0)
   })
 
+  it('joystick: true → nessun pad e un gesto touch sul canvas aggiorna il punteggio (end-to-end)', () => {
+    const fintoJoystick = { ...finto, joystick: true };
+    screen.apriSchermo(fintoJoystick, host, onEsci);
+    expect(host.querySelector('.pad')).toBeNull();
+    const canvas = host.querySelector('canvas')!;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1, clientX: 100, clientY: 100 }));
+    canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId: 1, clientX: 140, clientY: 100 })); // dx=40 ≥ deadzone
+    expect(host.querySelector('[data-teste="punti"]')!.textContent).toBe('Punti: 10');
+  });
+
   it('dopo due aperture consecutive i comandi non si duplicano', () => {
     apri();
     host.querySelector('[data-teste="chiudi"]' as string)!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

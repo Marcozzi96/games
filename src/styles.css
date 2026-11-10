@@ -143,6 +143,7 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  position: relative;
 }
 
 .canvas {
@@ -179,6 +180,28 @@ body {
 .pad-btn-ruota {
   grid-column: 1 / -1;
   grid-row: 3;
+}
+
+.joystick {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .overlay {
