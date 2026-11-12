@@ -214,8 +214,8 @@ describe('input', () => {
     ])
   })
 
-  it('legendaTasti: contratto completo di Tetris (tastiera + drag + swipe)', () => {
-    expect(input.legendaTasti(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'])).toEqual([
+  it('legendaTasti: contratto completo di Tetris (tastiera + drag + swipe + doppio tap)', () => {
+    expect(input.legendaTasti(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-giu', 'doppio-tap'])).toEqual([
       { tasti: '↑/W', etichetta: 'Su' },
       { tasti: '←/A', etichetta: 'Sinistra' },
       { tasti: '→/D', etichetta: 'Destra' },
@@ -225,8 +225,8 @@ describe('input', () => {
       { tasti: 'Trascina', etichetta: 'Muovi' },
       { tasti: 'Trascina', etichetta: 'Swipe sinistra' },
       { tasti: 'Trascina', etichetta: 'Swipe destra' },
-      { tasti: 'Trascina', etichetta: 'Swipe su' },
       { tasti: 'Trascina', etichetta: 'Swipe giù' },
+      { tasti: 'Doppio tocco', etichetta: 'Doppio tap' },
       { tasti: 'P/Escape', etichetta: 'Pausa' },
       { tasti: 'R', etichetta: 'Riavvia' },
     ])
@@ -273,12 +273,13 @@ describe('input', () => {
     expect(onComando).not.toHaveBeenCalled();
   });
 
-  it('tap sotto la soglia: muto anche se ruota è dichiarato (la rotazione passa allo swipe su)', () => {
+  it('tap sotto la soglia: muto anche se doppio-tap è dichiarato (il tap singolo resta muto)', () => {
     mockaRect(10, 20, 300, 400);
-    collega(['punta', 'ruota']);
+    collega(['punta', 'ruota', 'doppio-tap']);
     pointerdown(canvas, 100, 100); // pointerdown emette punta (tuple)
-    pointerup(canvas, 105, 103); // max = 5 < 24 → tap: muto (niente ruota)
+    pointerup(canvas, 105, 103); // max = 5 < 24 → tap: muto (niente ruota, niente doppio-tap)
     expect(onComando).not.toHaveBeenCalledWith('ruota');
+    expect(onComando).not.toHaveBeenCalledWith('doppio-tap');
   });
 
   it('tap sotto la soglia: non emette ruota se non dichiarato', () => {
@@ -287,6 +288,110 @@ describe('input', () => {
     pointerdown(canvas, 100, 100);
     pointerup(canvas, 105, 103); // tap: ruota non dichiarato → niente
     expect(onComando).not.toHaveBeenCalled();
+  });
+
+  describe('doppio-tap', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // tap = pointerdown + pointerup con max |d| < 24
+    const tap = (t: number, x = 100, y = 100): void => {
+      vi.setSystemTime(t);
+      pointerdown(canvas, x, y);
+      pointerup(canvas, x + 2, y + 1);
+    };
+
+    it('due tap entro 300ms (dichiarato) → doppio-tap emesso una volta, sul secondo tap', () => {
+      collega(['doppio-tap']);
+      tap(0);
+      expect(onComando).not.toHaveBeenCalled();
+      tap(200);
+      expect(onComando).toHaveBeenCalledTimes(1);
+      expect(onComando).toHaveBeenCalledWith('doppio-tap');
+    });
+
+    it('a 300ms esatti → emesso (soglia inclusa)', () => {
+      collega(['doppio-tap']);
+      tap(0);
+      tap(300);
+      expect(onComando).toHaveBeenCalledTimes(1);
+      expect(onComando).toHaveBeenCalledWith('doppio-tap');
+    });
+
+    it('a distanza > 300ms → nessun doppio-tap', () => {
+      collega(['doppio-tap']);
+      tap(0);
+      tap(400);
+      expect(onComando).not.toHaveBeenCalled();
+    });
+
+    it('tre tap rapidi → esattamente un doppio-tap', () => {
+      collega(['doppio-tap']);
+      tap(0);
+      tap(200); // emesso: sequenza consumata
+      tap(300); // tap pendente nuovo: niente emissione
+      expect(onComando).toHaveBeenCalledTimes(1);
+    });
+
+    it('non dichiarato → nessun doppio-tap (il tap resta muto)', () => {
+      collega(['punta', 'ruota']); // 'punta' aggancia i listener
+      tap(0);
+      tap(200);
+      expect(onComando).not.toHaveBeenCalledWith('doppio-tap');
+      expect(onComando).not.toHaveBeenCalledWith('ruota');
+    });
+
+    it('uno swipe tra i due tap rompe la sequenza (swipe+tap ≠ doppio tap)', () => {
+      collega(['doppio-tap', 'swipe-dx']);
+      tap(0);
+      vi.setSystemTime(150);
+      pointerdown(canvas, 100, 100);
+      pointerup(canvas, 200, 100); // dx=100 → swipe-dx
+      expect(onComando).toHaveBeenLastCalledWith('swipe-dx');
+      tap(250); // 100ms dopo, ma la sequenza è rotta
+      expect(onComando).toHaveBeenCalledTimes(1);
+    });
+
+    it('secondo dito: tap del dito 2 con gesto del dito 1 attivo non avvia la sequenza (Review Focus)', () => {
+      collega(['doppio-tap']);
+      vi.setSystemTime(0);
+      pointerdown(canvas, 100, 100, 1); // dito 1: gesto attivo
+      vi.setSystemTime(100);
+      pointerdown(canvas, 300, 300, 2); // dito 2: ignorato (pointerAttivo ≠ undefined)
+      pointerup(canvas, 301, 301, 2);   // ≠ pointer attivo → muto, non conta come tap
+      vi.setSystemTime(200);
+      pointerup(canvas, 101, 101, 1);   // dito 1: primo tap vero
+      expect(onComando).not.toHaveBeenCalled();
+      vi.setSystemTime(250);
+      pointerdown(canvas, 102, 102, 2); // dito 2: ora è il pointer attivo
+      pointerup(canvas, 103, 103, 2);   // tap a 50ms → doppio-tap legittimo
+      expect(onComando).toHaveBeenCalledTimes(1);
+      expect(onComando).toHaveBeenCalledWith('doppio-tap');
+    });
+
+    it('pointercancel sotto soglia conta come tap per la sequenza (Review Focus)', () => {
+      collega(['doppio-tap']);
+      vi.setSystemTime(0);
+      pointerdown(canvas, 100, 100);
+      pointercancel(canvas, 102, 101); // tap via cancel
+      vi.setSystemTime(200);
+      pointerdown(canvas, 100, 100);
+      pointerup(canvas, 101, 101);     // tap → doppio-tap
+      expect(onComando).toHaveBeenCalledTimes(1);
+      expect(onComando).toHaveBeenCalledWith('doppio-tap');
+    });
+
+    it('joystick attivo: doppio-tap mai emesso (mutua esclusione) (Review Focus)', () => {
+      collega(['doppio-tap'], undefined, true);
+      tap(0);
+      tap(200);
+      expect(onComando).not.toHaveBeenCalled();
+    });
   });
 
   it('swipe dichiarato + ruota: uno swipe giù emette swipe-giu, mai ruota (il tap è muto)', () => {

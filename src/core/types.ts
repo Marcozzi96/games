@@ -1,7 +1,7 @@
 // Tipi condivisi della shell (fonte di verità per giochi e core).
 
 export type Comando = 'su' | 'giu' | 'sx' | 'dx' | 'conferma' | 'ruota' | 'punta'
-  | 'swipe-su' | 'swipe-giu' | 'swipe-sx' | 'swipe-dx';
+  | 'swipe-su' | 'swipe-giu' | 'swipe-sx' | 'swipe-dx' | 'doppio-tap';
 
 export type HandleGioco = {
   pausa(): void;

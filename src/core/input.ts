@@ -7,7 +7,7 @@
 //   relative al canvas (setPointerCapture).
 // - swipe-*: gesto riconosciuto al rilascio (pointerup/pointercancel del
 //   pointer attivo): max(|dx|,|dy|) >= 24px → comando sull'asse dominante;
-//   sotto soglia = tap → muto (la rotazione di Tetris è uno swipe su).
+//   sotto soglia = tap: muto, salvo 'doppio-tap' (due tap entro 300ms, se dichiarato).
 // - joystick: thumbstick flottante (compare dove poggia il dito, lo segue,
 //   scompare al rilascio); emette direzione dominante solo al cambio di
 //   direzione; sopprime il pad e i gestori punta/swipe.
@@ -65,11 +65,13 @@ const ETICHETTE: Record<Comando, string> = {
   'swipe-giu': 'Swipe giù',
   'swipe-sx': 'Swipe sinistra',
   'swipe-dx': 'Swipe destra',
+  'doppio-tap': 'Doppio tap',
 };
 
 const DIREZIONI: Comando[] = ['su', 'giu', 'sx', 'dx'];
 const SWIPE: Comando[] = ['swipe-su', 'swipe-giu', 'swipe-sx', 'swipe-dx'];
 const SOGLIA_SWIPE = 24; // px CSS: sotto è un tap, non uno swipe
+const SOGLIA_DOPPIO_TAP = 300; // ms: finestra del doppio tap (soglia inclusa)
 const SOGLIA_JOYSTICK = 20; // px CSS: sotto non si emette nulla
 const MAX_SPOSTAMENTO_KNOB = 28; // px CSS: spostamento max del knob
 
@@ -81,6 +83,10 @@ export function legendaTasti(comandi: Comando[], joystick = false): RigaLegenda[
     if (c === 'punta') {
       // 'punta' non ha tasti ma è un gesto touch (drag): lo mostro in legenda.
       righe.push({ tasti: 'Trascina', etichetta: 'Muovi' })
+      continue
+    }
+    if (c === 'doppio-tap') {
+      righe.push({ tasti: 'Doppio tocco', etichetta: ETICHETTE[c] })
       continue
     }
     if (SWIPE.includes(c)) {
@@ -107,6 +113,7 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
   const dichiarati = new Set(comandi);
   let attivo = true;
   let pointerAttivo: { id: number; x: number; y: number } | undefined;
+  let ultimoTap: number | undefined; // timestamp (Date.now) dell'ultimo tap sotto soglia
 
   // Stato joystick
   let stick: { id: number; x0: number; y0: number } | undefined;
@@ -193,18 +200,28 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
     const dy = e.clientY - pointerAttivo.y;
     pointerAttivo = undefined;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < SOGLIA_SWIPE) {
-      // Tap sotto la soglia: muto. La rotazione si fa con uno swipe su
-      // (Tetris); qui il tap non genera più comandi (evita rotazioni casuali
-      // quando si vuole solo spostare il pezzo di poco).
+      // Tap sotto la soglia: muto, salvo doppio-tap dichiarato (due tap entro
+      // SOGLIA_DOPPIO_TAP). Il tap singolo non genera comandi (evita azioni
+      // casuali quando si vuole solo spostare il pezzo di poco).
+      if (dichiarati.has('doppio-tap')) {
+        const ora = Date.now();
+        if (ultimoTap !== undefined && ora - ultimoTap <= SOGLIA_DOPPIO_TAP) {
+          onComando('doppio-tap');
+          ultimoTap = undefined; // tre tap rapidi = un doppio tap + tap pendente nuovo
+        } else {
+          ultimoTap = ora;
+        }
+      }
       return;
     }
+    ultimoTap = undefined; // uno swipe rompe la sequenza del doppio tap
     const dir: Comando = Math.abs(dx) > Math.abs(dy)
       ? (dx > 0 ? 'swipe-dx' : 'swipe-sx')
       : (dy > 0 ? 'swipe-giu' : 'swipe-su');
     if (dichiarati.has(dir)) onComando(dir);
   };
 
-  if (!joystick && (dichiarati.has('punta') || SWIPE.some((c) => dichiarati.has(c)))) {
+  if (!joystick && (dichiarati.has('punta') || dichiarati.has('doppio-tap') || SWIPE.some((c) => dichiarati.has(c)))) {
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', rilascia);
@@ -288,6 +305,7 @@ export function CollegaInput({ canvas, comandi, pad = true, joystick = false, on
     smonta(): void {
       attivo = false;
       pointerAttivo = undefined;
+      ultimoTap = undefined;
       stick = undefined;
       ultimoDir = undefined;
       stickEl?.remove();
