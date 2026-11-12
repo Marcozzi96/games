@@ -27,10 +27,12 @@ function crea(ctx: CtxGioco): HandleGioco {
   let pieceId: string | undefined // id del pezzo attivo: azzera l'ancora a ogni nuovo pezzo
   // Stato del gesto in corso (per la velocità del rilascio): t0 = timestamp del
   // primo punta; (gsx,gsy) = posizione di inizio; (glx,gly) = ultimo punta;
-  // gestoAttivo = un pointerdown è in corso.
+  // gestoAttivo = un pointerdown è in corso; pezzoMosso = il drag ha spostato
+  // la tessera orizzontalmente (sopprime il rilascio verticale).
   let t0 = 0
   let gsx = 0, gsy = 0, glx = 0, gly = 0
   let gestoAttivo = false
+  let pezzoMosso = false
 
   const disegna = (): void => {
     const c = ctx.canvas.getContext('2d')
@@ -168,7 +170,14 @@ function crea(ctx: CtxGioco): HandleGioco {
 
   // Fine di un gesto touch: classifica il rilascio (flick o trascinamento lento)
   // e pulisce lo stato del drag (ancora + flag) per il prossimo gesto.
+  // Se il pezzo si è mosso orizzontalmente durante il gesto, il rilascio
+  // verticale (hard drop / rotazione) è soppresso: il gesto era di posizionamento.
   const esitoRilascio = (asse: AsseSwipe): EsitoRilascio => {
+    if (pezzoMosso && (asse === 'su' || asse === 'giu')) {
+      seg = { ancora: undefined, dir: undefined }
+      gestoAttivo = false
+      return 'nessuno'
+    }
     const esito = gestoAttivo
       ? classificaRilascio(glx - gsx, gly - gsy, Date.now() - t0, asse)
       : 'nessuno'
@@ -255,6 +264,7 @@ function crea(ctx: CtxGioco): HandleGioco {
       gestoAttivo = true
       t0 = Date.now()
       gsx = x; gsy = y
+      pezzoMosso = false
     }
     glx = x; gly = y
     const id = stato.tessera?.id
@@ -265,7 +275,11 @@ function crea(ctx: CtxGioco): HandleGioco {
       disegna()
       return
     }
+    const xPrima = stato.tessera?.x
     const r = seguiDito(stato, seg, x)
+    if (r.stato.tessera?.x !== xPrima) {
+      pezzoMosso = true
+    }
     stato = r.stato
     seg = r.seg
     disegna()
@@ -327,6 +341,7 @@ function crea(ctx: CtxGioco): HandleGioco {
       seg = { ancora: undefined, dir: undefined } // azzera il drag: niente ancora residua
       pieceId = undefined
       gestoAttivo = false // e il gesto in corso: niente velocità fantasma dopo il reset
+      pezzoMosso = false
       t0 = 0; gsx = 0; gsy = 0; glx = 0; gly = 0
       avviata = false
       pauSata = false // riparte pulita: anche se la shell era in pausa

@@ -70,6 +70,36 @@ describe('tetris (Gioco)', () => {
     expect(ctx.invia.punteggio).not.toHaveBeenCalled()
   })
 
+  it('drag diagonale (pezzo mosso) + swipe-giu → NIENTE hard drop (soppresso)', () => {
+    const { ctx, comanda } = ctxFinto()
+    vi.setSystemTime(0)
+    comanda(['punta', 0, 0])    // avvia, ancora x=0
+    comanda(['punta', 30, 120]) // 30px dx > 24 → 1 cella mossa; 120px dy
+    vi.setSystemTime(100)       // veloce
+    comanda('swipe-giu')        // verticale: soppresso per pezzoMosso
+    expect(ctx.invia.punteggio).not.toHaveBeenCalled()
+  })
+
+  it('drag diagonale (pezzo mosso) + swipe-su → NIENTE rotazione (soppressa)', () => {
+    const { comanda } = ctxFinto()
+    vi.setSystemTime(0)
+    comanda(['punta', 0, 100])  // avvia, ancora x=0
+    comanda(['punta', 30, 20])  // 30px dx > 24 → 1 cella mossa; 80px dy su
+    vi.setSystemTime(100)       // veloce
+    comanda('swipe-su')         // verticale: soppressa per pezzoMosso
+    expect(beep).not.toHaveBeenCalledWith(330, 0.04)
+  })
+
+  it('swipe verticale con piccolo offset dx (< 24px): hard drop funziona (pezzo non si muove)', () => {
+    const { ctx, comanda } = ctxFinto()
+    vi.setSystemTime(0)
+    comanda(['punta', 0, 0])
+    comanda(['punta', 10, 120]) // solo 10px dx < 24 → il pezzo NON si muove
+    vi.setSystemTime(100)       // veloce
+    comanda('swipe-giu')
+    expect(ctx.invia.punteggio).toHaveBeenCalledWith(38)
+  })
+
   it('flick orizzontale veloce → gettata (beep 200)', () => {
     const { comanda } = ctxFinto()
     vi.setSystemTime(0)
