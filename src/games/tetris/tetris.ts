@@ -22,7 +22,7 @@ function crea(ctx: CtxGioco): HandleGioco {
   let smontata = false
   let timer: number | undefined
   let timerSoft: number | undefined
-  // Controllo touch: drag "segue il dito" (punta) + flick al rilascio (swipe).
+  // Controllo touch: drag "segue il dito" (punta) + flick al rilascio (swipe) + doppio tap per ruotare.
   let seg: SegueDito = { ancora: undefined, dir: undefined }
   let pieceId: string | undefined // id del pezzo attivo: azzera l'ancora a ogni nuovo pezzo
   // Stato del gesto in corso (per la velocità del rilascio): t0 = timestamp del
@@ -171,9 +171,9 @@ function crea(ctx: CtxGioco): HandleGioco {
   // Fine di un gesto touch: classifica il rilascio (flick o trascinamento lento)
   // e pulisce lo stato del drag (ancora + flag) per il prossimo gesto.
   // Se il pezzo si è mosso orizzontalmente durante il gesto, il rilascio
-  // verticale (hard drop / rotazione) è soppresso: il gesto era di posizionamento.
+  // verticale (hard drop) è soppresso: il gesto era di posizionamento.
   const esitoRilascio = (asse: AsseSwipe): EsitoRilascio => {
-    if (pezzoMosso && (asse === 'su' || asse === 'giu')) {
+    if (pezzoMosso && asse === 'giu') {
       seg = { ancora: undefined, dir: undefined }
       gestoAttivo = false
       return 'nessuno'
@@ -235,15 +235,6 @@ function crea(ctx: CtxGioco): HandleGioco {
         }
         break
       }
-      case 'swipe-su': { // flick su veloce e lungo → ruota
-        const esito = esitoRilascio('su')
-        if (esito === 'ruota') {
-          const formaPrima = stato.tessera?.forma
-          stato = ruota(stato)
-          if (stato.tessera?.forma !== formaPrima) beep(330, 0.04)
-        }
-        break
-      }
       case 'swipe-giu': { // flick giù veloce e lungo → hard drop
         const esito = esitoRilascio('giu')
         if (esito === 'hardDrop') {
@@ -251,6 +242,14 @@ function crea(ctx: CtxGioco): HandleGioco {
           ctx.invia.punteggio(stato.punti)
           beep(110, 0.05)
         }
+        break
+      }
+      case 'doppio-tap': { // doppio tap sul canvas → ruota (no gating: il gesto è già qualificato)
+        const formaPrima = stato.tessera?.forma
+        stato = ruota(stato)
+        if (stato.tessera?.forma !== formaPrima) beep(330, 0.04)
+        seg = { ancora: undefined, dir: undefined }
+        gestoAttivo = false
         break
       }
     }
@@ -359,7 +358,7 @@ export const tetris: Gioco = {
   id: 'tetris',
   nome: 'Tetris',
   icona: '/icons/icon-tetris.svg',
-  comandi: ['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'],
+  comandi: ['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-giu', 'doppio-tap'],
   pad: false,
   crea,
 }

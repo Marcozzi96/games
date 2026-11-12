@@ -42,12 +42,12 @@ describe('tetris (Gioco)', () => {
     vi.restoreAllMocks()
   })
 
-  it('è registrato col contratto atteso (pad touch: niente pulsanti, drag+swipe+tap)', () => {
+  it('è registrato col contratto atteso (pad touch: niente pulsanti, drag+swipe+doppio tap)', () => {
     expect(tetris.id).toBe('tetris')
     expect(tetris.nome).toBe('Tetris')
     expect(tetris.icona).toBe('/icons/icon-tetris.svg')
     expect(tetris.pad).toBe(false)
-    expect(tetris.comandi).toEqual(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-su', 'swipe-giu'])
+    expect(tetris.comandi).toEqual(['su', 'sx', 'dx', 'giu', 'ruota', 'conferma', 'punta', 'swipe-sx', 'swipe-dx', 'swipe-giu', 'doppio-tap'])
   })
 
   it('swipe-giu: hard drop (38 per la I orizzontale da y=0), solo su flick veloce', () => {
@@ -80,14 +80,13 @@ describe('tetris (Gioco)', () => {
     expect(ctx.invia.punteggio).not.toHaveBeenCalled()
   })
 
-  it('drag diagonale (pezzo mosso) + swipe-su → NIENTE rotazione (soppressa)', () => {
+  it('doppio-tap dopo un drag orizzontale: ruota lo stesso (nessuna soppressione)', () => {
     const { comanda } = ctxFinto()
     vi.setSystemTime(0)
-    comanda(['punta', 0, 100])  // avvia, ancora x=0
-    comanda(['punta', 30, 20])  // 30px dx > 24 → 1 cella mossa; 80px dy su
-    vi.setSystemTime(100)       // veloce
-    comanda('swipe-su')         // verticale: soppressa per pezzoMosso
-    expect(beep).not.toHaveBeenCalledWith(330, 0.04)
+    comanda(['punta', 0, 0])    // avvia + ancora
+    comanda(['punta', 30, 0])   // 30px > 24 → 1 cella mossa (pezzoMosso)
+    comanda('doppio-tap')       // ruota comunque: no gating di velocità
+    expect(beep).toHaveBeenCalledWith(330, 0.04)
   })
 
   it('swipe verticale con piccolo offset dx (< 24px): hard drop funziona (pezzo non si muove)', () => {
@@ -120,14 +119,30 @@ describe('tetris (Gioco)', () => {
     expect(beep).not.toHaveBeenCalledWith(200, 0.03)
   })
 
-  it('swipe su veloce e lungo → ruota (beep 330)', () => {
+  it('doppio-tap → ruota (beep 330) e non invia punteggio (Review Focus)', () => {
+    const { ctx, comanda } = ctxFinto()
+    comanda('doppio-tap') // avvia (primo comando) + ruota: I diventa verticale 4×1
+    expect(beep).toHaveBeenCalledWith(330, 0.04)
+    expect(ctx.invia.punteggio).not.toHaveBeenCalled()
+  })
+
+  it('swipe-su non ruota più (rimosso dai comandi)', () => {
     const { comanda } = ctxFinto()
     vi.setSystemTime(0)
     comanda(['punta', 0, 100])
     comanda(['punta', 5, 20])  // su 80px, veloce
-    vi.setSystemTime(100)
-    comanda('swipe-su')
-    expect(beep).toHaveBeenCalledWith(330, 0.04)
+    comanda('swipe-su')        // non dichiarato più: no-op
+    expect(beep).not.toHaveBeenCalledWith(330, 0.04)
+  })
+
+  it('doppio-tap durante la pausa: non ruota (Review Focus)', () => {
+    const { ctx, comanda } = ctxFinto()
+    comanda('sx')          // avvia (I orizzontale)
+    ctx.handle.pausa()
+    comanda('doppio-tap')  // ignorato: la forma resta orizzontale
+    ctx.handle.riprendi()
+    comanda('conferma')    // hard drop I orizzontale = 38 (se fosse ruotata: 32)
+    expect(ctx.invia.punteggio).toHaveBeenLastCalledWith(38)
   })
 
   it('punta (drag) + flick veloce: gettata e il gioco resta giocabile', () => {
